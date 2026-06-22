@@ -49,10 +49,9 @@ const userSchema = new mongoose.Schema(
 );
 
 // Pre-save hook: hash password before saving to database
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
   this.password = await bcrypt.hash(this.password, 12);
-  next();
 });
 
 // Instance method: compare a plain password against the stored hash
