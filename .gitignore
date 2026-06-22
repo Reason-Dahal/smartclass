@@ -1,0 +1,25 @@
+# Node.js
+node_modules/
+.env
+.env.*
+npm-debug.log*
+dist/
+
+# Flutter
+client/.dart_tool/
+client/.flutter-plugins
+client/.flutter-plugins-dependencies
+client/build/
+client/.packages
+client/pubspec.lock
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+*.suo
+*.user
