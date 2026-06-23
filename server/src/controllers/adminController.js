@@ -5,6 +5,9 @@ const Program = require('../models/Program');
 const Batch = require('../models/Batch');
 const generateTempPassword = require('../utils/generatePassword');
 const sendEmail = require('../utils/email');
+const Batch = require('../models/Batch');
+const Course = require('../models/Course');
+const Enrollment = require('../models/Enrollment');
 
 // ─── TEACHER MANAGEMENT ───────────────────────────────────────────
 
@@ -341,12 +344,229 @@ const updateUserStatus = async (req, res) => {
   }
 };
 
+// ─── PROGRAM MANAGEMENT ──────────────────────────────────────────
+
+const createProgram = async (req, res) => {
+  try {
+    const { name, type } = req.body;
+
+    if (!name || !type) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Name and type are required' },
+      });
+    }
+
+    if (!['semester', 'year'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Type must be semester or year' },
+      });
+    }
+
+    const program = await Program.create({ name, type });
+
+    res.status(201).json({
+      success: true,
+      data: { program },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'DUPLICATE_NAME', message: 'A program with this name already exists' },
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const getPrograms = async (req, res) => {
+  try {
+    const programs = await Program.find({ isActive: true });
+
+    res.status(200).json({
+      success: true,
+      data: { programs },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const updateProgram = async (req, res) => {
+  try {
+    const { name, isActive } = req.body;
+
+    const program = await Program.findById(req.params.id);
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Program not found' },
+      });
+    }
+
+    if (name) program.name = name;
+    if (isActive !== undefined) program.isActive = isActive;
+    await program.save();
+
+    res.status(200).json({
+      success: true,
+      data: { program },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── BATCH MANAGEMENT ────────────────────────────────────────────
+
+const createBatch = async (req, res) => {
+  try {
+    const { programId } = req.params;
+    const { name, intakeYear } = req.body;
+
+    if (!name || !intakeYear) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Name and intakeYear are required' },
+      });
+    }
+
+    const program = await Program.findById(programId);
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Program not found' },
+      });
+    }
+
+    const batch = await Batch.create({ programId, name, intakeYear });
+
+    res.status(201).json({
+      success: true,
+      data: { batch },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'DUPLICATE', message: 'A batch for this program and intake year already exists' },
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const getBatches = async (req, res) => {
+  try {
+    const batches = await Batch.find({ programId: req.params.programId })
+      .populate('programId', 'name type totalTerms');
+
+    res.status(200).json({
+      success: true,
+      data: { batches },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const promoteBatch = async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.id)
+      .populate('programId', 'totalTerms name');
+
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Batch not found' },
+      });
+    }
+
+    if (batch.currentTerm >= batch.programId.totalTerms) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'PROMOTION_LIMIT',
+          message: `Batch is already at the final term (${batch.programId.totalTerms}) of ${batch.programId.name}`,
+        },
+      });
+    }
+
+    const previousTerm = batch.currentTerm;
+    batch.currentTerm += 1;
+    await batch.save();
+
+    // Auto-enroll all students in this batch into compulsory courses for the new term
+    const newTermCourses = await Course.find({
+      programId: batch.programId._id,
+      term: batch.currentTerm,
+      isElective: false,
+      isActive: true,
+    });
+
+    const students = await Student.find({ batchId: batch._id });
+
+    const enrollments = [];
+    for (const student of students) {
+      for (const course of newTermCourses) {
+        enrollments.push({
+          studentId: student._id,
+          courseId: course._id,
+          enrollmentType: 'compulsory',
+        });
+      }
+    }
+
+    if (enrollments.length > 0) {
+      // insertMany with ordered: false continues even if some duplicates exist
+      await Enrollment.insertMany(enrollments, { ordered: false }).catch(() => {});
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message: `Batch promoted from Term ${previousTerm} to Term ${batch.currentTerm}`,
+        studentsAffected: students.length,
+        coursesEnrolled: newTermCourses.length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
 module.exports = {
   createTeacher,
   getTeachers,
   updateTeacher,
   createStudent,
-  getStudents,
+  getStudents, 
   updateStudent,
   updateUserStatus,
+  createProgram, 
+  getPrograms, 
+  updateProgram,
+  createBatch, 
+  getBatches, 
+  promoteBatch,
 };
