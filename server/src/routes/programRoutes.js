@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createProgram, getPrograms, updateProgram,
-  createBatch, getBatches, promoteBatch,
+  createBatch, getBatches,getAllBatches, promoteBatch,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -17,6 +17,7 @@ router.patch('/:id', updateProgram);
 // Batch routes (nested under programs)
 router.post('/:programId/batches', createBatch);
 router.get('/:programId/batches', getBatches);
+router.get('/batches', getAllBatches);
 
 // Promotion (separate path — acts on a batch by its own ID)
 router.post('/batches/:id/promote', promoteBatch);

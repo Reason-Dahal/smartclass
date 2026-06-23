@@ -7,6 +7,10 @@ const generateTempPassword = require('../utils/generatePassword');
 const sendEmail = require('../utils/email');
 const Course = require('../models/Course');
 const Enrollment = require('../models/Enrollment');
+const Attendance = require('../models/Attendance');
+const Marksheet = require('../models/Marksheet');
+const FinalResult = require('../models/FinalResult');
+const EvaluationConfig = require('../models/EvaluationConfig');
 
 // ─── TEACHER MANAGEMENT ───────────────────────────────────────────
 
@@ -489,6 +493,23 @@ const getBatches = async (req, res) => {
   }
 };
 
+const getAllBatches = async (req, res) => {
+  try {
+    const batches = await Batch.find()
+      .populate('programId', 'name type totalTerms');
+
+    res.status(200).json({
+      success: true,
+      data: { batches },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
 const promoteBatch = async (req, res) => {
   try {
     const batch = await Batch.findById(req.params.id)
@@ -585,19 +606,335 @@ const resetUserPassword = async (req, res) => {
   }
 };
 
+// ─── ACADEMIC OVERRIDES (FR-ADM-09) ──────────────────────────────
+
+const overrideAttendance = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!['present', 'absent', 'late'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Status must be present, absent or late',
+        },
+      });
+    }
+
+    const record = await Attendance.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Attendance record not found' },
+      });
+    }
+
+    record.status = status;
+    record.markedBy = req.user._id;
+    await record.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Attendance overridden successfully', record },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const overrideMarksheet = async (req, res) => {
+  try {
+    const { internalExamMarks, internalExamTotalMarks, teacherEvaluationScore } = req.body;
+
+    const marksheet = await Marksheet.findById(req.params.id);
+    if (!marksheet) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Marksheet not found' },
+      });
+    }
+
+    if (internalExamMarks !== undefined) marksheet.internalExamMarks = internalExamMarks;
+    if (internalExamTotalMarks !== undefined) marksheet.internalExamTotalMarks = internalExamTotalMarks;
+    if (teacherEvaluationScore !== undefined) marksheet.teacherEvaluationScore = teacherEvaluationScore;
+    marksheet.uploadedBy = req.user._id;
+
+    await marksheet.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Marksheet overridden successfully', marksheet },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── ENROLLMENT MANAGEMENT ───────────────────────────────────────
+const manualEnroll = async (req, res) => {
+  try {
+    const { studentId, courseId } = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Student not found' },
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    const enrollment = await Enrollment.create({
+      studentId: student._id,
+      courseId: course._id,
+      enrollmentType: 'compulsory',
+    });
+
+    res.status(201).json({
+      success: true,
+      data: { message: 'Student enrolled successfully', enrollment },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'ALREADY_ENROLLED', message: 'Student is already enrolled in this course' },
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+
+// ─── FINAL RESULTS (FR-ADM-12) ───────────────────────────────────
+
+const uploadFinalResults = async (req, res) => {
+  try {
+    const { results } = req.body;
+
+    // results = [{ studentId, term, overallStatus, publishedDate, courseResults: [{ courseId, status }] }]
+
+    if (!results || !Array.isArray(results) || results.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'results array is required',
+        },
+      });
+    }
+
+    const saved = await Promise.all(
+      results.map(({ studentId, term, overallStatus, publishedDate, courseResults }) =>
+        FinalResult.findOneAndUpdate(
+          { studentId, term },
+          {
+            studentId,
+            term,
+            overallStatus,
+            courseResults,
+            publishedDate: new Date(publishedDate),
+            enteredBy: req.user._id,
+          },
+          { upsert: true, new: true, runValidators: true }
+        )
+      )
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message: `Final results uploaded for ${saved.length} students`,
+        results: saved,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── EVALUATION CONFIG (FR-ADM-06) ───────────────────────────────
+
+const getEvaluationConfig = async (req, res) => {
+  try {
+    let config = await EvaluationConfig.findOne();
+
+    if (!config) {
+      config = {
+        attendanceWeight: 25,
+        internalExamWeight: 25,
+        assignmentWeight: 25,
+        teacherEvaluationWeight: 25,
+      };
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { config },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const updateEvaluationConfig = async (req, res) => {
+  try {
+    const {
+      attendanceWeight,
+      internalExamWeight,
+      assignmentWeight,
+      teacherEvaluationWeight,
+    } = req.body;
+
+    // Validate weights add up to 100
+    const total =
+      (attendanceWeight || 0) +
+      (internalExamWeight || 0) +
+      (assignmentWeight || 0) +
+      (teacherEvaluationWeight || 0);
+
+    if (total !== 100) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: `Weights must add up to 100. Current total: ${total}`,
+        },
+      });
+    }
+
+    const config = await EvaluationConfig.findOneAndUpdate(
+      {},
+      {
+        attendanceWeight,
+        internalExamWeight,
+        assignmentWeight,
+        teacherEvaluationWeight,
+        updatedBy: req.user._id,
+      },
+      { upsert: true, new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'Evaluation config updated successfully',
+        config,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── SYSTEM REPORTS (FR-ADM-07) ──────────────────────────────────
+
+const getSystemReports = async (req, res) => {
+  try {
+    const [
+      totalStudents,
+      totalTeachers,
+      totalPrograms,
+      totalCourses,
+      totalAttendanceRecords,
+      totalAssignments,
+      totalSubmissions,
+    ] = await Promise.all([
+      Student.countDocuments(),
+      Teacher.countDocuments(),
+      Program.countDocuments({ isActive: true }),
+      Course.countDocuments({ isActive: true }),
+      Attendance.countDocuments(),
+      Assignment.countDocuments({ isActive: true }),
+      Submission.countDocuments(),
+    ]);
+
+    // Attendance breakdown across the whole system
+    const [presentCount, absentCount, lateCount] = await Promise.all([
+      Attendance.countDocuments({ status: 'present' }),
+      Attendance.countDocuments({ status: 'absent' }),
+      Attendance.countDocuments({ status: 'late' }),
+    ]);
+
+    const overallAttendanceRate =
+      totalAttendanceRecords > 0
+        ? ((presentCount / totalAttendanceRecords) * 100).toFixed(2)
+        : 0;
+
+    // Assignment submission rate
+    const submissionRate =
+      totalAssignments > 0 && totalStudents > 0
+        ? ((totalSubmissions / (totalAssignments * totalStudents)) * 100).toFixed(2)
+        : 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        overview: {
+          totalStudents,
+          totalTeachers,
+          totalPrograms,
+          totalCourses,
+        },
+        attendance: {
+          totalRecords: totalAttendanceRecords,
+          present: presentCount,
+          absent: absentCount,
+          late: lateCount,
+          overallAttendanceRate: `${overallAttendanceRate}%`,
+        },
+        assignments: {
+          totalAssignments,
+          totalSubmissions,
+          submissionRate: `${submissionRate}%`,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+
+
 module.exports = {
-  createTeacher,
-  getTeachers,
-  updateTeacher,
-  createStudent,
-  getStudents, 
-  updateStudent,
-  updateUserStatus,
-  createProgram, 
-  getPrograms, 
-  updateProgram,
-  createBatch, 
-  getBatches, 
-  promoteBatch,
-  resetUserPassword,
+  createTeacher, getTeachers, updateTeacher,
+  createStudent, getStudents, updateStudent,
+  updateUserStatus, resetUserPassword,
+  createProgram, getPrograms, updateProgram,
+  createBatch, getBatches, getAllBatches, promoteBatch,
+  manualEnroll, 
+  overrideAttendance, overrideMarksheet,
+  uploadFinalResults,
+  getEvaluationConfig, updateEvaluationConfig,
+  getSystemReports,
 };

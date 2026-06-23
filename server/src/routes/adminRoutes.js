@@ -9,6 +9,7 @@ const {
   updateStudent,
   updateUserStatus,
   resetUserPassword,
+  manualEnroll,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -32,5 +33,8 @@ router.patch('/users/:id/status', updateUserStatus);
 
 //User
 router.patch('/users/reset-password', resetUserPassword);
+
+//Enroll
+router.post('/enroll', manualEnroll);
 
 module.exports = router;
