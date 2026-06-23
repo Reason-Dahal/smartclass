@@ -15,7 +15,7 @@ const programSchema = new mongoose.Schema(
     },
     totalTerms: {
       type: Number,
-      required: [true, 'Total terms is required'],
+      default: 0,
     },
     isActive: {
       type: Boolean,
@@ -27,10 +27,9 @@ const programSchema = new mongoose.Schema(
   }
 );
 
-programSchema.pre('save', function (next) {
-  if (!this.isModified('type')) return next();
+programSchema.pre('save', function () {
+  if (!this.isModified('type')) return;
   this.totalTerms = this.type === 'semester' ? 8 : 4;
-  next();
 });
 
 const Program = mongoose.model('Program', programSchema);

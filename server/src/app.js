@@ -3,6 +3,7 @@ const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const programRoutes = require('./routes/programRoutes');
+const courseRoutes = require('./routes/courseRoutes');
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/admin/programs', programRoutes);
+app.use('/api/v1/courses', courseRoutes);
 
 // Health check
 app.get('/', (req, res) => {

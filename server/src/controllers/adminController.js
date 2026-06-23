@@ -5,7 +5,6 @@ const Program = require('../models/Program');
 const Batch = require('../models/Batch');
 const generateTempPassword = require('../utils/generatePassword');
 const sendEmail = require('../utils/email');
-const Batch = require('../models/Batch');
 const Course = require('../models/Course');
 const Enrollment = require('../models/Enrollment');
 
@@ -37,6 +36,8 @@ const createTeacher = async (req, res) => {
     }
 
     const tempPassword = generateTempPassword();
+    
+console.log('Temp password for', email, ':', tempPassword);
 
     const user = await User.create({
       name,
@@ -183,6 +184,7 @@ const createStudent = async (req, res) => {
     }
 
     const tempPassword = generateTempPassword();
+console.log('Temp password for', email, ':', tempPassword);
 
     const user = await User.create({
       name,
@@ -555,6 +557,34 @@ const promoteBatch = async (req, res) => {
   }
 };
 
+const resetUserPassword = async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    const user = await User.findOne({ email }).select('+password');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'User not found' },
+      });
+    }
+
+    user.password = newPassword;
+    user.mustChangePassword = true;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: `Password reset successfully for ${email}` },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
 module.exports = {
   createTeacher,
   getTeachers,
@@ -569,4 +599,5 @@ module.exports = {
   createBatch, 
   getBatches, 
   promoteBatch,
+  resetUserPassword,
 };

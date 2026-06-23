@@ -8,6 +8,7 @@ const {
   getStudents,
   updateStudent,
   updateUserStatus,
+  resetUserPassword,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -25,7 +26,11 @@ router.post('/students', createStudent);
 router.get('/students', getStudents);
 router.patch('/students/:id', updateStudent);
 
+
 // User status
 router.patch('/users/:id/status', updateUserStatus);
+
+//User
+router.patch('/users/reset-password', resetUserPassword);
 
 module.exports = router;
