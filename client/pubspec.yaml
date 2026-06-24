@@ -1,0 +1,63 @@
+name: client
+description: "A new Flutter project."
+
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+    # State management
+  flutter_riverpod: ^2.6.1
+
+  # HTTP client — for calling our Node.js API
+  dio: ^5.8.0+1
+
+  # Secure storage — for saving JWT token safely
+  flutter_secure_storage: ^9.2.4
+
+  # Navigation
+  go_router: ^14.6.3
+
+  # Local storage for simple data
+  shared_preferences: ^2.3.5
+
+  # Form validation
+  reactive_forms: ^17.0.0
+
+  # File picker — for assignment submissions
+  file_picker: ^10.1.9
+
+  # Toast notifications
+  fluttertoast: ^8.2.12
+
+  # Loading indicators
+  flutter_spinkit: ^5.2.1
+
+  # Cached network image
+  cached_network_image: ^3.4.1
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+
+  flutter_lints: ^6.0.0
+
+
+
+
+flutter:
+
+
+  uses-material-design: true
+
+
