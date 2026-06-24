@@ -205,6 +205,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                         ).hasMatch(value)) {
                           return 'Must contain at least one special character';
                         }
+                        return null;
                       },
                     ),
                     const SizedBox(height: 16),

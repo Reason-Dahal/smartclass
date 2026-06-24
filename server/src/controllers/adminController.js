@@ -11,6 +11,8 @@ const Attendance = require('../models/Attendance');
 const Marksheet = require('../models/Marksheet');
 const FinalResult = require('../models/FinalResult');
 const EvaluationConfig = require('../models/EvaluationConfig');
+const Assignment = require('../models/Assignment');
+const Submission = require('../models/Submission');
 
 // ─── TEACHER MANAGEMENT ───────────────────────────────────────────
 
