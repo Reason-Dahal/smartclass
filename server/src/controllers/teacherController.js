@@ -585,6 +585,49 @@ const createAssignment = async (req, res) => {
     }
   };
 
+  const getCourseStudents = async (req, res) => {
+    try {
+      const { courseId } = req.params;
+  
+      const verified = await verifyTeacherCourse(req.user._id, courseId);
+      if (!verified) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Course not found or you are not the teacher of this course',
+          },
+        });
+      }
+  
+      const enrollments = await Enrollment.find({
+        courseId,
+        isActive: true,
+      }).populate({
+        path: 'studentId',
+        select: 'rollNumber userId',
+        populate: { path: 'userId', select: 'name email' },
+      });
+  
+      const students = enrollments.map((e) => ({
+        studentId: e.studentId._id,
+        rollNumber: e.studentId.rollNumber,
+        name: e.studentId.userId?.name || '',
+        email: e.studentId.userId?.email || '',
+      }));
+  
+      res.status(200).json({
+        success: true,
+        data: { students },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: { code: 'SERVER_ERROR', message: error.message },
+      });
+    }
+  };
+
   module.exports = {
     takeAttendance,
     getAttendance,
@@ -597,4 +640,5 @@ const createAssignment = async (req, res) => {
     deleteNote,
     uploadMarksheet,
     bulkUploadMarksheets,
+    getCourseStudents,
   };

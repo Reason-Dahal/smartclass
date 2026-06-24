@@ -13,6 +13,7 @@ const {
   deleteNote,
   uploadMarksheet,
   bulkUploadMarksheets,
+  getCourseStudents,
 } = require('../controllers/teacherController');
 
 router.use(protect);
@@ -22,6 +23,7 @@ router.use(authorize('teacher'));
 router.post('/courses/:courseId/attendance', takeAttendance);
 router.get('/courses/:courseId/attendance', getAttendance);
 router.patch('/attendance/:id', correctAttendance);
+router.get('/courses/:courseId/students', getCourseStudents);
 
 // Assignments
 router.post('/courses/:courseId/assignments', createAssignment);

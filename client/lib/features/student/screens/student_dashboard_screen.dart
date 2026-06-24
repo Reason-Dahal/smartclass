@@ -11,6 +11,7 @@ import '../data/student_service.dart';
 import '../models/student_models.dart';
 import '../../../core/network/upload_service.dart';
 import '../../../core/constants/api_constants.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 
 // ─── PROVIDERS ───────────────────────────────────────────────────
@@ -575,11 +576,20 @@ class _NotesTab extends ConsumerWidget {
                     Icons.download_outlined,
                     color: AppColors.primary,
                   ),
-                  onTap: () {
-                    // File download — will implement with url_launcher
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Opening: ${note.title}')),
-                    );
+                  onTap: () async {
+                    final uri = Uri.parse(note.fileUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Could not open file')),
+                        );
+                      }
+                    }
                   },
                 ),
               );

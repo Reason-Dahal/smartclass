@@ -223,4 +223,21 @@ class TeacherService {
       throw ApiException.networkError();
     }
   }
+
+  //Attendance
+  Future<List<Map<String, dynamic>>> getCourseStudents(String courseId) async {
+    try {
+      final response = await _dio.get('/teacher/courses/$courseId/students');
+      final students = response.data['data']['students'] as List;
+      return students.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
 }

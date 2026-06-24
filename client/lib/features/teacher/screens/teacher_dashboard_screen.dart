@@ -335,23 +335,233 @@ class _CoursesTab extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     TeacherCourseModel course,
-  ) {
+  ) async {
+    final service = ref.read(teacherServiceProvider);
+
+    // Show loading while fetching students
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Take attendance — ${course.subjectName}'),
-        content: const Text(
-          'Attendance taking requires student list. '
-          'This feature works when students are enrolled in this course.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+
+    try {
+      final students = await service.getCourseStudents(course.id);
+      if (context.mounted) Navigator.pop(context); // close loading
+
+      if (students.isEmpty) {
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('No students'),
+              content: const Text(
+                'No students are enrolled in this course yet.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // Build attendance map — default everyone to present
+      final attendanceMap = <String, String>{};
+      for (final s in students) {
+        attendanceMap[s['studentId']] = 'present';
+      }
+
+      final dateController = TextEditingController(
+        text: DateTime.now().toIso8601String().split('T')[0],
+      );
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setState) => AlertDialog(
+              title: Text('Attendance — ${course.subjectName}'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Date field
+                    TextField(
+                      controller: dateController,
+                      decoration: const InputDecoration(
+                        labelText: 'Date (YYYY-MM-DD)',
+                        prefixIcon: Icon(Icons.calendar_today, size: 18),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Mark all present button
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          setState(() {
+                            for (final s in students) {
+                              attendanceMap[s['studentId']] = 'present';
+                            }
+                          });
+                        },
+                        child: const Text('Mark all present'),
+                      ),
+                    ),
+
+                    // Student list
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 300),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: students.length,
+                        itemBuilder: (ctx, index) {
+                          final student = students[index];
+                          final studentId = student['studentId'] as String;
+                          final status = attendanceMap[studentId] ?? 'present';
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                // Avatar
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AppColors.infoLight,
+                                  child: Text(
+                                    (student['name'] as String)[0]
+                                        .toUpperCase(),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+
+                                // Name and roll
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        student['name'] as String,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        student['rollNumber'] as String,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // P / A / L toggles
+                                Row(
+                                  children: [
+                                    _StatusButton(
+                                      label: 'P',
+                                      selected: status == 'present',
+                                      selectedColor: AppColors.present,
+                                      onTap: () => setState(
+                                        () => attendanceMap[studentId] =
+                                            'present',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    _StatusButton(
+                                      label: 'A',
+                                      selected: status == 'absent',
+                                      selectedColor: AppColors.absent,
+                                      onTap: () => setState(
+                                        () =>
+                                            attendanceMap[studentId] = 'absent',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    _StatusButton(
+                                      label: 'L',
+                                      selected: status == 'late',
+                                      selectedColor: AppColors.late,
+                                      onTap: () => setState(
+                                        () => attendanceMap[studentId] = 'late',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final records = attendanceMap.entries
+                        .map((e) => {'studentId': e.key, 'status': e.value})
+                        .toList();
+
+                    try {
+                      await service.takeAttendance(
+                        course.id,
+                        dateController.text,
+                        records,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Attendance saved successfully'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(e.toString())));
+                      }
+                    }
+                  },
+                  child: const Text('Save attendance'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
   }
 
   void _showCreateAssignment(
@@ -626,83 +836,265 @@ class _GradingTab extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     TeacherCourseModel course,
-  ) {
-    final studentIdController = TextEditingController();
-    final internalMarksController = TextEditingController();
-    final totalMarksController = TextEditingController();
-    final evalScoreController = TextEditingController();
-    final termController = TextEditingController();
+  ) async {
+    final service = ref.read(teacherServiceProvider);
 
+    // Show loading while fetching students
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Marksheet — ${course.subjectName}'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: studentIdController,
-                decoration: const InputDecoration(labelText: 'Student ID'),
-              ),
-              TextField(
-                controller: termController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Term'),
-              ),
-              TextField(
-                controller: internalMarksController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Internal Exam Marks',
-                ),
-              ),
-              TextField(
-                controller: totalMarksController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Total Marks'),
-              ),
-              TextField(
-                controller: evalScoreController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Teacher Eval Score (0-100)',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final service = ref.read(teacherServiceProvider);
-              await service.uploadMarksheet(
-                course.id,
-                studentId: studentIdController.text,
-                term: int.tryParse(termController.text) ?? 1,
-                internalExamMarks:
-                    double.tryParse(internalMarksController.text) ?? 0,
-                internalExamTotalMarks:
-                    double.tryParse(totalMarksController.text) ?? 100,
-                teacherEvaluationScore:
-                    double.tryParse(evalScoreController.text) ?? 0,
-              );
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Marksheet uploaded')),
-                );
-              }
-            },
-            child: const Text('Submit'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+
+    try {
+      final students = await service.getCourseStudents(course.id);
+      if (context.mounted) Navigator.pop(context);
+
+      if (students.isEmpty) {
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('No students'),
+              content: const Text(
+                'No students are enrolled in this course yet.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // Build marks map for each student
+      // { studentId: { internalMarks, totalMarks, evalScore, term } }
+      final marksMap = <String, Map<String, TextEditingController>>{};
+      for (final s in students) {
+        marksMap[s['studentId']] = {
+          'internalMarks': TextEditingController(),
+          'totalMarks': TextEditingController(text: '100'),
+          'evalScore': TextEditingController(),
+          'term': TextEditingController(text: '1'),
+        };
+      }
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setState) => AlertDialog(
+              title: Text('Marksheet — ${course.subjectName}'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Enter marks for each student:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 400),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: students.length,
+                        itemBuilder: (ctx, index) {
+                          final student = students[index];
+                          final studentId = student['studentId'] as String;
+                          final controllers = marksMap[studentId]!;
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Student info
+                                  Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 14,
+                                        backgroundColor: AppColors.infoLight,
+                                        child: Text(
+                                          (student['name'] as String)[0]
+                                              .toUpperCase(),
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            student['name'] as String,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          Text(
+                                            student['rollNumber'] as String,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Marks fields
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller:
+                                              controllers['internalMarks'],
+                                          keyboardType: TextInputType.number,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Marks',
+                                            isDense: true,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: controllers['totalMarks'],
+                                          keyboardType: TextInputType.number,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Out of',
+                                            isDense: true,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: controllers['evalScore'],
+                                          keyboardType: TextInputType.number,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Eval (0-100)',
+                                            isDense: true,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: 80,
+                                    child: TextField(
+                                      controller: controllers['term'],
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Term',
+                                        isDense: true,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    try {
+                      // Submit marksheet for each student
+                      for (final student in students) {
+                        final studentId = student['studentId'] as String;
+                        final controllers = marksMap[studentId]!;
+
+                        final internalMarks =
+                            double.tryParse(
+                              controllers['internalMarks']!.text,
+                            ) ??
+                            0;
+                        final totalMarks =
+                            double.tryParse(controllers['totalMarks']!.text) ??
+                            100;
+                        final evalScore =
+                            double.tryParse(controllers['evalScore']!.text) ??
+                            0;
+                        final term =
+                            int.tryParse(controllers['term']!.text) ?? 1;
+
+                        // Skip if marks not entered
+                        if (controllers['internalMarks']!.text.isEmpty) {
+                          continue;
+                        }
+
+                        await service.uploadMarksheet(
+                          course.id,
+                          studentId: studentId,
+                          term: term,
+                          internalExamMarks: internalMarks,
+                          internalExamTotalMarks: totalMarks,
+                          teacherEvaluationScore: evalScore,
+                        );
+                      }
+
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Marksheets saved successfully'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(e.toString())));
+                      }
+                    }
+                  },
+                  child: const Text('Save marks'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
   }
 }
 
@@ -858,6 +1250,48 @@ class _CourseCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color selectedColor;
+  final VoidCallback onTap;
+
+  const _StatusButton({
+    required this.label,
+    required this.selected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected ? selectedColor : Colors.white,
+          border: Border.all(
+            color: selected ? selectedColor : AppColors.border,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: selected ? Colors.white : AppColors.textMuted,
+            ),
+          ),
         ),
       ),
     );
