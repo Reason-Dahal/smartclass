@@ -9,6 +9,8 @@ import '../data/teacher_service.dart';
 import '../models/teacher_models.dart';
 import 'package:client/shared/widgets/loading_widget.dart';
 import 'package:client/shared/widgets/error_widget.dart';
+import '../../../core/network/upload_service.dart';
+import '../../../core/constants/api_constants.dart';
 import 'dart:convert';
 
 // ─── PROVIDERS ───────────────────────────────────────────────────
@@ -447,51 +449,126 @@ class _CoursesTab extends ConsumerWidget {
     TeacherCourseModel course,
   ) {
     final titleController = TextEditingController();
-    final urlController = TextEditingController();
+    String? selectedFileUrl;
+    bool isUploading = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Upload note — ${course.subjectName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: 'Title'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: Text('Upload note — ${course.subjectName}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: 'Title'),
+              ),
+              const SizedBox(height: 12),
+              // File picker button
+              if (selectedFileUrl == null)
+                ElevatedButton.icon(
+                  onPressed: isUploading
+                      ? null
+                      : () async {
+                          setState(() => isUploading = true);
+                          try {
+                            final uploadService = UploadService();
+                            final url = await uploadService.pickAndUploadFile(
+                              ApiConstants.uploadNote,
+                            );
+                            setState(() {
+                              selectedFileUrl = url;
+                              isUploading = false;
+                            });
+                          } catch (e) {
+                            setState(() => isUploading = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          }
+                        },
+                  icon: isUploading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.upload_file, size: 16),
+                  label: Text(isUploading ? 'Uploading...' : 'Pick file'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
+                )
+              else
+                // Show selected file confirmation
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.successLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle,
+                        color: AppColors.success,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'File uploaded successfully',
+                          style: TextStyle(
+                            color: AppColors.success,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => selectedFileUrl = null),
+                        child: const Icon(
+                          Icons.close,
+                          size: 16,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: urlController,
-              decoration: const InputDecoration(labelText: 'File URL'),
+            ElevatedButton(
+              onPressed: selectedFileUrl == null || titleController.text.isEmpty
+                  ? null
+                  : () async {
+                      final service = ref.read(teacherServiceProvider);
+                      await service.uploadNote(
+                        course.id,
+                        title: titleController.text,
+                        fileUrl: selectedFileUrl!,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Note uploaded')),
+                        );
+                      }
+                    },
+              child: const Text('Upload'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (titleController.text.isEmpty || urlController.text.isEmpty)
-                return;
-              final service = ref.read(teacherServiceProvider);
-              await service.uploadNote(
-                course.id,
-                title: titleController.text,
-                fileUrl: urlController.text,
-              );
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('Note uploaded')));
-              }
-            },
-            child: const Text('Upload'),
-          ),
-        ],
       ),
     );
   }

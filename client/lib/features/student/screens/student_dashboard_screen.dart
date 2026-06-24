@@ -9,6 +9,8 @@ import '../../../core/network/app_router.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../data/student_service.dart';
 import '../models/student_models.dart';
+import '../../../core/network/upload_service.dart';
+import '../../../core/constants/api_constants.dart';
 import 'dart:convert';
 
 // ─── PROVIDERS ───────────────────────────────────────────────────
@@ -735,11 +737,65 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _AssignmentCard extends StatelessWidget {
+class _AssignmentCard extends ConsumerStatefulWidget {
   final AssignmentModel assignment;
   final bool showSubmit;
 
   const _AssignmentCard({required this.assignment, this.showSubmit = false});
+
+  @override
+  ConsumerState<_AssignmentCard> createState() => _AssignmentCardState();
+}
+
+class _AssignmentCardState extends ConsumerState<_AssignmentCard> {
+  bool _isUploading = false;
+
+  Future<void> _submitAssignment() async {
+    final uploadService = UploadService();
+    final studentService = StudentService();
+
+    setState(() => _isUploading = true);
+
+    try {
+      final fileUrl = await uploadService.pickAndUploadFile(
+        ApiConstants.uploadSubmission,
+      );
+
+      if (fileUrl == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No file selected')));
+        }
+        return;
+      }
+
+      await studentService.submitAssignment(
+        widget.assignment.id,
+        fileUrl: fileUrl,
+      );
+
+      // Refresh assignments list
+      ref.invalidate(studentAssignmentsProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Assignment submitted successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -754,14 +810,14 @@ class _AssignmentCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    assignment.title,
+                    widget.assignment.title,
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                     ),
                   ),
                 ),
-                if (assignment.isSubmitted)
+                if (widget.assignment.isSubmitted)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -780,7 +836,7 @@ class _AssignmentCard extends StatelessWidget {
                       ),
                     ),
                   )
-                else if (assignment.isPastDue)
+                else if (widget.assignment.isPastDue)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -803,12 +859,34 @@ class _AssignmentCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${assignment.subjectName} · Due ${_formatDate(assignment.dueDate)}',
+              '${widget.assignment.subjectName} · Due ${_formatDate(widget.assignment.dueDate)}',
               style: const TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
               ),
             ),
+            // Submit button
+            if (widget.showSubmit && !widget.assignment.isSubmitted) ...[
+              const SizedBox(height: 10),
+              _isUploading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton.icon(
+                      onPressed: _submitAssignment,
+                      icon: const Icon(Icons.upload_file, size: 16),
+                      label: Text(
+                        widget.assignment.isPastDue
+                            ? 'Submit late'
+                            : 'Submit assignment',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 36),
+                        backgroundColor: widget.assignment.isPastDue
+                            ? AppColors.warning
+                            : AppColors.primary,
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+            ],
           ],
         ),
       ),

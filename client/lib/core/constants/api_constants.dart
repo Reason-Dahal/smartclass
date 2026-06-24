@@ -32,7 +32,6 @@ class ApiConstants {
   static const String courses = '/courses';
 
   // Teacher
-  // Teacher
   static const String teacherCourses = '/courses/teacher/my-courses';
   static const String teacherAttendance = '/teacher/attendance';
   static const String teacherAssignments = '/teacher/assignments';
@@ -56,4 +55,8 @@ class ApiConstants {
   static const String finalResults = '/admin/final-results';
   static const String evaluationConfig = '/admin/evaluation-config';
   static const String reports = '/admin/reports';
+
+  // Uploads
+  static const String uploadSubmission = '/upload/submission';
+  static const String uploadNote = '/upload/note';
 }
