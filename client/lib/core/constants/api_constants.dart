@@ -1,6 +1,16 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConstants {
-  // Base URL — change this to your production URL when deploying
-  static const String baseUrl = 'http://192.168.1.82:5000/api/v1';
+  static String get baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:5000/api/v1';
+    }
+    // For physical device — change this to your IP when it changes
+    return 'http://192.168.1.82:5000/api/v1';
+  }
+
+  // // Base URL — change this to your production URL when deploying
+  // static const String baseUrl = 'http://192.168.1.82:5000/api/v1';
 
   // Auth
   static const String login = '/auth/login';
