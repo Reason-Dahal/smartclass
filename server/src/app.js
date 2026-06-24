@@ -7,6 +7,7 @@ const courseRoutes = require('./routes/courseRoutes');
 const teacherRoutes = require('./routes/teacherRoutes');
 const studentRoutes = require('./routes/studentRoutes');
 const adminAcademicRoutes = require('./routes/adminAcademicRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use('/api/v1/courses', courseRoutes);
 app.use('/api/v1/teacher', teacherRoutes);
 app.use('/api/v1/student', studentRoutes);
 app.use('/api/v1/admin', adminAcademicRoutes);
+app.use('/api/v1/upload', uploadRoutes);
 
 // Health check
 app.get('/', (req, res) => {
