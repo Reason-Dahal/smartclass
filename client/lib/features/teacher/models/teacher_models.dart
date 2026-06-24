@@ -18,7 +18,10 @@ class TeacherCourseModel {
   });
 
   factory TeacherCourseModel.fromJson(Map<String, dynamic> json) {
-    final program = json['programId'] as Map<String, dynamic>? ?? {};
+    // programId can be either a populated object or a plain string ID
+    final programRaw = json['programId'];
+    final program = programRaw is Map<String, dynamic> ? programRaw : {};
+
     return TeacherCourseModel(
       id: json['_id'] ?? '',
       subjectName: json['subjectName'] ?? '',
@@ -76,14 +79,15 @@ class TeacherAssignmentModel {
   });
 
   factory TeacherAssignmentModel.fromJson(Map<String, dynamic> json) {
+    final courseRaw = json['courseId'];
     return TeacherAssignmentModel(
       id: json['_id'] ?? '',
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       dueDate: DateTime.tryParse(json['dueDate'] ?? '') ?? DateTime.now(),
-      courseId: json['courseId'] is String
-          ? json['courseId']
-          : (json['courseId'] as Map<String, dynamic>?)?['_id'] ?? '',
+      courseId: courseRaw is Map<String, dynamic>
+          ? courseRaw['_id'] ?? ''
+          : courseRaw?.toString() ?? '',
       submissionCount: json['submissionCount'] ?? 0,
     );
   }

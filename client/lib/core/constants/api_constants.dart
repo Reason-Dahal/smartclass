@@ -32,11 +32,13 @@ class ApiConstants {
   static const String courses = '/courses';
 
   // Teacher
-  static const String teacherCourses = '/teacher/courses';
+  // Teacher
+  static const String teacherCourses = '/courses/teacher/my-courses';
   static const String teacherAttendance = '/teacher/attendance';
   static const String teacherAssignments = '/teacher/assignments';
   static const String teacherSubmissions = '/teacher/submissions';
   static const String teacherNotes = '/teacher/notes';
+  static const String teacherCoursesBase = '/teacher/courses';
 
   // Student
   static const String studentAttendance = '/student/attendance';

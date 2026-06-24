@@ -50,7 +50,7 @@ class TeacherService {
   ) async {
     try {
       final response = await _dio.get(
-        '${ApiConstants.teacherCourses}/$courseId/attendance',
+        '/teacher/courses/$courseId/attendance',
         queryParameters: {'date': date},
       );
       final records = response.data['data']['attendance'] as List;
@@ -73,7 +73,7 @@ class TeacherService {
   ) async {
     try {
       await _dio.post(
-        '${ApiConstants.teacherCourses}/$courseId/attendance',
+        '/teacher/courses/$courseId/attendance',
         data: {'date': date, 'records': records},
       );
     } on DioException catch (e) {
@@ -97,7 +97,7 @@ class TeacherService {
   }) async {
     try {
       await _dio.post(
-        '${ApiConstants.teacherCourses}/$courseId/assignments',
+        '/teacher/courses/$courseId/assignments',
         data: {'title': title, 'description': description, 'dueDate': dueDate},
       );
     } on DioException catch (e) {
@@ -156,10 +156,9 @@ class TeacherService {
 
   Future<List<TeacherNoteModel>> getNotes(String courseId) async {
     try {
-      final response = await _dio.get(
-        '${ApiConstants.teacherCourses}/$courseId/notes',
-      );
-      final notes = response.data['data']['notes'] as List;
+      final response = await _dio.get('/teacher/courses/$courseId/notes');
+      final data = response.data['data'];
+      final notes = (data['notes'] ?? []) as List;
       return notes.map((e) => TeacherNoteModel.fromJson(e)).toList();
     } on DioException catch (e) {
       if (e.response != null) {
@@ -179,7 +178,7 @@ class TeacherService {
   }) async {
     try {
       await _dio.post(
-        '${ApiConstants.teacherCourses}/$courseId/notes',
+        '/teacher/courses/$courseId/notes',
         data: {'title': title, 'fileUrl': fileUrl},
       );
     } on DioException catch (e) {
@@ -205,7 +204,7 @@ class TeacherService {
   }) async {
     try {
       await _dio.post(
-        '${ApiConstants.teacherCourses}/$courseId/marksheets',
+        '/teacher/courses/$courseId/marksheets',
         data: {
           'studentId': studentId,
           'term': term,
