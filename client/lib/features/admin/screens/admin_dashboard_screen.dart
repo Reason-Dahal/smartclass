@@ -131,6 +131,238 @@ class _HomeSection extends ConsumerWidget {
 
   const _HomeSection({required this.userName, required this.onNavigate});
 
+  void _showUploadFinalResults(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(adminServiceProvider);
+
+    // First fetch students list
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final studentsAsync = await ref.read(adminStudentsProvider.future);
+      if (context.mounted) Navigator.pop(context);
+
+      if (studentsAsync.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No students found')));
+        }
+        return;
+      }
+
+      // Controllers
+      String? selectedStudentId;
+      String selectedStatus = 'pass';
+      final termController = TextEditingController(text: '1');
+      final dateController = TextEditingController(
+        text: DateTime.now().toIso8601String().split('T')[0],
+      );
+
+      // For course results — simplified: one course result entry
+      final courseIdController = TextEditingController();
+      String courseStatus = 'pass';
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setState) => AlertDialog(
+              title: const Text('Upload Final Result'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Dean\'s Office published result',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Student dropdown
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Select Student',
+                        isDense: true,
+                      ),
+                      value: selectedStudentId,
+                      items: studentsAsync
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s.id,
+                              child: Text(
+                                s.name,
+                                style: const TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) =>
+                          setState(() => selectedStudentId = val),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Term
+                    TextField(
+                      controller: termController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Term',
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Published date
+                    TextField(
+                      controller: dateController,
+                      decoration: const InputDecoration(
+                        labelText: 'Published Date (YYYY-MM-DD)',
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Overall status
+                    const Text(
+                      'Overall Status',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Radio<String>(
+                          value: 'pass',
+                          groupValue: selectedStatus,
+                          onChanged: (val) =>
+                              setState(() => selectedStatus = val!),
+                          activeColor: AppColors.success,
+                        ),
+                        const Text('Pass'),
+                        const SizedBox(width: 16),
+                        Radio<String>(
+                          value: 'fail',
+                          groupValue: selectedStatus,
+                          onChanged: (val) =>
+                              setState(() => selectedStatus = val!),
+                          activeColor: AppColors.danger,
+                        ),
+                        const Text('Fail'),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Course result
+                    const Text(
+                      'Course Result (enter course ID)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: courseIdController,
+                      decoration: const InputDecoration(
+                        labelText: 'Course ID',
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Radio<String>(
+                          value: 'pass',
+                          groupValue: courseStatus,
+                          onChanged: (val) =>
+                              setState(() => courseStatus = val!),
+                          activeColor: AppColors.success,
+                        ),
+                        const Text('Pass'),
+                        const SizedBox(width: 16),
+                        Radio<String>(
+                          value: 'fail',
+                          groupValue: courseStatus,
+                          onChanged: (val) =>
+                              setState(() => courseStatus = val!),
+                          activeColor: AppColors.danger,
+                        ),
+                        const Text('Fail'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: selectedStudentId == null
+                      ? null
+                      : () async {
+                          try {
+                            await service.uploadFinalResults(
+                              studentId: selectedStudentId!,
+                              term: int.tryParse(termController.text) ?? 1,
+                              overallStatus: selectedStatus,
+                              publishedDate: dateController.text,
+                              courseResults: courseIdController.text.isEmpty
+                                  ? []
+                                  : [
+                                      {
+                                        'courseId': courseIdController.text,
+                                        'status': courseStatus,
+                                      },
+                                    ],
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Final result uploaded successfully',
+                                  ),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          }
+                        },
+                  child: const Text('Upload'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reports = ref.watch(adminReportsProvider);
@@ -202,7 +434,7 @@ class _HomeSection extends ConsumerWidget {
               physics: const NeverScrollableScrollPhysics(),
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 1.4,
+              childAspectRatio: 1.6,
               children: [
                 _ActionCard(
                   icon: Icons.person_add_outlined,
@@ -227,6 +459,13 @@ class _HomeSection extends ConsumerWidget {
                   label: 'Reports',
                   color: AppColors.warning,
                   onTap: () => onNavigate(4),
+                ),
+
+                _ActionCard(
+                  icon: Icons.fact_check_outlined,
+                  label: 'Final Results',
+                  color: AppColors.danger,
+                  onTap: () => _showUploadFinalResults(context, ref),
                 ),
               ],
             ),
@@ -419,32 +658,36 @@ class _StudentsSection extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Add Student'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
-              ),
-              TextField(
-                controller: emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              TextField(
-                controller: rollController,
-                decoration: const InputDecoration(labelText: 'Roll Number'),
-              ),
-              TextField(
-                controller: programIdController,
-                decoration: const InputDecoration(labelText: 'Program ID'),
-              ),
-              TextField(
-                controller: batchIdController,
-                decoration: const InputDecoration(labelText: 'Batch ID'),
-              ),
-            ],
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                TextField(
+                  controller: rollController,
+                  decoration: const InputDecoration(labelText: 'Roll Number'),
+                ),
+                TextField(
+                  controller: programIdController,
+                  decoration: const InputDecoration(labelText: 'Program ID'),
+                ),
+                TextField(
+                  controller: batchIdController,
+                  decoration: const InputDecoration(labelText: 'Batch ID'),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [

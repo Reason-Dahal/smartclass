@@ -236,4 +236,38 @@ class AdminService {
       throw ApiException.networkError();
     }
   }
+
+  //Final Year Report
+  Future<void> uploadFinalResults({
+    required String studentId,
+    required int term,
+    required String overallStatus,
+    required String publishedDate,
+    required List<Map<String, dynamic>> courseResults,
+  }) async {
+    try {
+      await _dio.post(
+        ApiConstants.finalResults,
+        data: {
+          'results': [
+            {
+              'studentId': studentId,
+              'term': term,
+              'overallStatus': overallStatus,
+              'publishedDate': publishedDate,
+              'courseResults': courseResults,
+            },
+          ],
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
 }
