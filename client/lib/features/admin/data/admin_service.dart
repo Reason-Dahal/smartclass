@@ -300,4 +300,47 @@ class AdminService {
       throw ApiException.networkError();
     }
   }
+
+  //Evaluation
+  Future<Map<String, dynamic>> getEvaluationConfig() async {
+    try {
+      final response = await _dio.get(ApiConstants.evaluationConfig);
+      return response.data['data']['config'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> updateEvaluationConfig({
+    required int attendanceWeight,
+    required int internalExamWeight,
+    required int assignmentWeight,
+    required int teacherEvaluationWeight,
+  }) async {
+    try {
+      await _dio.patch(
+        ApiConstants.evaluationConfig,
+        data: {
+          'attendanceWeight': attendanceWeight,
+          'internalExamWeight': internalExamWeight,
+          'assignmentWeight': assignmentWeight,
+          'teacherEvaluationWeight': teacherEvaluationWeight,
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
 }

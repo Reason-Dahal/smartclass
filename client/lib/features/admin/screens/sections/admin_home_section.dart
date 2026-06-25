@@ -127,6 +127,12 @@ class AdminHomeSection extends ConsumerWidget {
                   color: AppColors.primaryLight,
                   onTap: () => _showCreateCourse(context, ref),
                 ),
+                ActionCard(
+                  icon: Icons.tune_outlined,
+                  label: 'Eval Config',
+                  color: AppColors.primaryDark,
+                  onTap: () => _showEvaluationConfig(context, ref),
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -582,5 +588,209 @@ class AdminHomeSection extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
+  }
+
+  void _showEvaluationConfig(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(adminServiceProvider);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final config = await ref.read(evaluationConfigProvider.future);
+      if (context.mounted) Navigator.pop(context);
+
+      // Initialize sliders from current config
+      int attendance = (config['attendanceWeight'] ?? 25).toInt();
+      int internalExam = (config['internalExamWeight'] ?? 25).toInt();
+      int assignment = (config['assignmentWeight'] ?? 25).toInt();
+      int teacherEval = (config['teacherEvaluationWeight'] ?? 25).toInt();
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setState) {
+              final total =
+                  attendance + internalExam + assignment + teacherEval;
+              final isValid = total == 100;
+
+              return AlertDialog(
+                title: const Text('Evaluation Weights'),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Weights must add up to 100',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Total indicator
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isValid
+                              ? AppColors.successLight
+                              : AppColors.dangerLight,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Total: $total / 100',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isValid
+                                ? AppColors.success
+                                : AppColors.danger,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Attendance
+                      _WeightSlider(
+                        label: 'Attendance',
+                        value: attendance,
+                        onChanged: (val) => setState(() => attendance = val),
+                      ),
+
+                      // Internal Exam
+                      _WeightSlider(
+                        label: 'Internal Exam',
+                        value: internalExam,
+                        onChanged: (val) => setState(() => internalExam = val),
+                      ),
+
+                      // Assignments
+                      _WeightSlider(
+                        label: 'Assignments',
+                        value: assignment,
+                        onChanged: (val) => setState(() => assignment = val),
+                      ),
+
+                      // Teacher Evaluation
+                      _WeightSlider(
+                        label: 'Teacher Eval',
+                        value: teacherEval,
+                        onChanged: (val) => setState(() => teacherEval = val),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: !isValid
+                        ? null
+                        : () async {
+                            try {
+                              await service.updateEvaluationConfig(
+                                attendanceWeight: attendance,
+                                internalExamWeight: internalExam,
+                                assignmentWeight: assignment,
+                                teacherEvaluationWeight: teacherEval,
+                              );
+                              ref.invalidate(evaluationConfigProvider);
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Evaluation config updated'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.toString())),
+                                );
+                              }
+                            }
+                          },
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+}
+
+class _WeightSlider extends StatelessWidget {
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  const _WeightSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            Container(
+              width: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.infoLight,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '$value%',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        Slider(
+          value: value.toDouble(),
+          min: 0,
+          max: 100,
+          divisions: 100,
+          activeColor: AppColors.primary,
+          onChanged: (val) => onChanged(val.toInt()),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
   }
 }

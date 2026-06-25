@@ -23,3 +23,9 @@ final adminBatchesProvider = FutureProvider<List<BatchModel>>((ref) async {
 final adminReportsProvider = FutureProvider<SystemReportModel>((ref) async {
   return ref.read(adminServiceProvider).getReports();
 });
+
+final evaluationConfigProvider = FutureProvider<Map<String, dynamic>>((
+  ref,
+) async {
+  return ref.read(adminServiceProvider).getEvaluationConfig();
+});
