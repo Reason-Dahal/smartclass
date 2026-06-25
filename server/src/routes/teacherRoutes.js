@@ -14,6 +14,7 @@ const {
   uploadMarksheet,
   bulkUploadMarksheets,
   getCourseStudents,
+  getCourseAssignments,
 } = require('../controllers/teacherController');
 
 router.use(protect);
@@ -30,6 +31,7 @@ router.post('/courses/:courseId/assignments', createAssignment);
 router.patch('/assignments/:id', updateAssignment);
 router.get('/assignments/:id/submissions', getSubmissions);
 router.patch('/submissions/:id/grade', gradeSubmission);
+router.get('/courses/:courseId/assignments', getCourseAssignments);
 
 // Notes
 router.post('/courses/:courseId/notes', uploadNote);

@@ -240,4 +240,23 @@ class TeacherService {
       throw ApiException.networkError();
     }
   }
+
+  //Assignents
+  Future<List<Map<String, dynamic>>> getCourseAssignments(
+    String courseId,
+  ) async {
+    try {
+      final response = await _dio.get('/teacher/courses/$courseId/assignments');
+      final assignments = response.data['data']['assignments'] as List;
+      return assignments.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
 }
