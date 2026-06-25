@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:convert';
@@ -44,21 +45,58 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_sectionTitle()),
-        leading: _currentSection != 0
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() => _currentSection = 0),
-              )
-            : null,
+    return PopScope(
+      canPop: false, // prevents back gesture from exiting
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentSection != 0) {
+          // If not on home tab, go back to home tab
+          setState(() => _currentSection = 0);
+        } else {
+          // If on home tab, show exit confirmation
+          _showExitDialog(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_sectionTitle()),
+          leading: _currentSection != 0
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => setState(() => _currentSection = 0),
+                )
+              : null,
+          actions: [
+            IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+          ],
+        ),
+        body: _buildSection(),
+      ),
+    );
+  }
+
+  Future<void> _showExitDialog(BuildContext context) async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Exit SmartClass?'),
+        content: const Text('Are you sure you want to exit the app?'),
         actions: [
-          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Exit'),
+          ),
         ],
       ),
-      body: _buildSection(),
     );
+
+    if (shouldExit == true && context.mounted) {
+      SystemNavigator.pop();
+    }
   }
 
   String _sectionTitle() {
