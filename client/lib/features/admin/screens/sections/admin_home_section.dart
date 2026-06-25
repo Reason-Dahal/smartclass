@@ -121,6 +121,12 @@ class AdminHomeSection extends ConsumerWidget {
                   color: AppColors.danger,
                   onTap: () => _showUploadFinalResults(context, ref),
                 ),
+                ActionCard(
+                  icon: Icons.menu_book_outlined,
+                  label: 'Create Course',
+                  color: AppColors.primaryLight,
+                  onTap: () => _showCreateCourse(context, ref),
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -357,6 +363,211 @@ class AdminHomeSection extends ConsumerWidget {
                           }
                         },
                   child: const Text('Upload'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  void _showCreateCourse(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(adminServiceProvider);
+
+    // Fetch programs and teachers first
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final programs = await ref.read(adminProgramsProvider.future);
+      final teachers = await ref.read(adminTeachersProvider.future);
+      if (context.mounted) Navigator.pop(context);
+
+      if (programs.isEmpty || teachers.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'You need at least one program and one teacher first',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      String? selectedProgramId;
+      String? selectedTeacherId;
+      int? selectedTotalTerms;
+      final subjectController = TextEditingController();
+      final termController = TextEditingController(text: '1');
+      bool isElective = false;
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setState) => AlertDialog(
+              title: const Text('Create Course'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Program dropdown
+                      DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(
+                          labelText: 'Program',
+                          isDense: true,
+                        ),
+                        isExpanded: true,
+                        value: selectedProgramId,
+                        items: programs
+                            .map(
+                              (p) => DropdownMenuItem(
+                                value: p.id,
+                                child: Text(
+                                  '${p.name} (${p.type})',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            final program = programs.firstWhere(
+                              (p) => p.id == val,
+                            );
+                            setState(() {
+                              selectedProgramId = val;
+                              selectedTotalTerms = program.totalTerms;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Teacher dropdown
+                      DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(
+                          labelText: 'Teacher',
+                          isDense: true,
+                        ),
+                        isExpanded: true,
+                        value: selectedTeacherId,
+                        items: teachers
+                            .map(
+                              (t) => DropdownMenuItem(
+                                value: t.profileId,
+                                child: Text(
+                                  t.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (val) =>
+                            setState(() => selectedTeacherId = val),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Subject name
+                      TextField(
+                        controller: subjectController,
+                        decoration: const InputDecoration(
+                          labelText: 'Subject Name',
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Term
+                      TextField(
+                        controller: termController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: selectedTotalTerms != null
+                              ? 'Term (1–$selectedTotalTerms)'
+                              : 'Term',
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Elective toggle
+                      Row(
+                        children: [
+                          const Text(
+                            'Elective course',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          const Spacer(),
+                          Switch(
+                            value: isElective,
+                            onChanged: (val) =>
+                                setState(() => isElective = val),
+                            activeColor: AppColors.primary,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed:
+                      selectedProgramId == null ||
+                          selectedTeacherId == null ||
+                          subjectController.text.isEmpty
+                      ? null
+                      : () async {
+                          try {
+                            await service.createCourse(
+                              programId: selectedProgramId!,
+                              teacherId: selectedTeacherId!,
+                              subjectName: subjectController.text,
+                              term: int.tryParse(termController.text) ?? 1,
+                              isElective: isElective,
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Course created successfully'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          }
+                        },
+                  child: const Text('Create'),
                 ),
               ],
             ),

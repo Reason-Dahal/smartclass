@@ -270,4 +270,34 @@ class AdminService {
       throw ApiException.networkError();
     }
   }
+
+  // Add Courses
+  Future<void> createCourse({
+    required String programId,
+    required String teacherId,
+    required String subjectName,
+    required int term,
+    required bool isElective,
+  }) async {
+    try {
+      await _dio.post(
+        ApiConstants.courses,
+        data: {
+          'programId': programId,
+          'teacherId': teacherId,
+          'subjectName': subjectName,
+          'term': term,
+          'isElective': isElective,
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
 }

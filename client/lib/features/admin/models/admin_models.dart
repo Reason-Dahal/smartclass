@@ -1,5 +1,6 @@
 class AdminUserModel {
   final String id;
+  final String profileId; // Teacher/Student profile _id
   final String name;
   final String email;
   final String role;
@@ -8,6 +9,7 @@ class AdminUserModel {
 
   AdminUserModel({
     required this.id,
+    required this.profileId,
     required this.name,
     required this.email,
     required this.role,
@@ -19,6 +21,7 @@ class AdminUserModel {
     final userId = json['userId'] as Map<String, dynamic>? ?? json;
     return AdminUserModel(
       id: userId['_id'] ?? json['_id'] ?? '',
+      profileId: json['_id'] ?? '', // Teacher/Student profile _id
       name: userId['name'] ?? '',
       email: userId['email'] ?? '',
       role: userId['role'] ?? '',
