@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../models/admin_models.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/action_card.dart';
 import '../../widgets/stat_badge.dart';
@@ -132,6 +131,12 @@ class AdminHomeSection extends ConsumerWidget {
                   label: 'Eval Config',
                   color: AppColors.primaryDark,
                   onTap: () => _showEvaluationConfig(context, ref),
+                ),
+                ActionCard(
+                  icon: Icons.edit_note_outlined,
+                  label: 'Override Data',
+                  color: AppColors.textSecondary,
+                  onTap: () => _showOverrideOptions(context, ref),
                 ),
               ],
             ),
@@ -738,6 +743,259 @@ class AdminHomeSection extends ConsumerWidget {
       }
     }
   }
+
+  void _showOverrideOptions(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Override Academic Data',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Requires the document ID from the database',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(
+                Icons.calendar_today_outlined,
+                color: AppColors.primary,
+              ),
+              title: const Text('Override Attendance'),
+              subtitle: const Text(
+                'Change a student\'s attendance status',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showOverrideAttendance(context, ref);
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.grade_outlined,
+                color: AppColors.primary,
+              ),
+              title: const Text('Override Marksheet'),
+              subtitle: const Text(
+                'Correct internal exam marks or eval score',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showOverrideMarksheet(context, ref);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showOverrideAttendance(BuildContext context, WidgetRef ref) {
+    final idController = TextEditingController();
+    String selectedStatus = 'present';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Override Attendance'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: idController,
+                decoration: const InputDecoration(
+                  labelText: 'Attendance Record ID',
+                  hintText: 'Paste MongoDB _id here',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'New Status:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _StatusOption(
+                    label: 'Present',
+                    value: 'present',
+                    selected: selectedStatus,
+                    color: AppColors.present,
+                    onTap: () => setState(() => selectedStatus = 'present'),
+                  ),
+                  const SizedBox(width: 8),
+                  _StatusOption(
+                    label: 'Absent',
+                    value: 'absent',
+                    selected: selectedStatus,
+                    color: AppColors.absent,
+                    onTap: () => setState(() => selectedStatus = 'absent'),
+                  ),
+                  const SizedBox(width: 8),
+                  _StatusOption(
+                    label: 'Late',
+                    value: 'late',
+                    selected: selectedStatus,
+                    color: AppColors.late,
+                    onTap: () => setState(() => selectedStatus = 'late'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: idController.text.isEmpty
+                  ? null
+                  : () async {
+                      try {
+                        final service = ref.read(adminServiceProvider);
+                        await service.overrideAttendance(
+                          attendanceId: idController.text.trim(),
+                          status: selectedStatus,
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Attendance overridden successfully',
+                              ),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      }
+                    },
+              child: const Text('Override'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showOverrideMarksheet(BuildContext context, WidgetRef ref) {
+    final idController = TextEditingController();
+    final internalMarksController = TextEditingController();
+    final totalMarksController = TextEditingController(text: '100');
+    final evalScoreController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Override Marksheet'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: idController,
+                decoration: const InputDecoration(
+                  labelText: 'Marksheet Record ID',
+                  hintText: 'Paste MongoDB _id here',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: internalMarksController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Internal Exam Marks',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: totalMarksController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Total Marks',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: evalScoreController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Teacher Eval Score (0-100)',
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (idController.text.isEmpty ||
+                  internalMarksController.text.isEmpty)
+                return;
+              try {
+                final service = ref.read(adminServiceProvider);
+                await service.overrideMarksheet(
+                  marksheetId: idController.text.trim(),
+                  internalExamMarks:
+                      double.tryParse(internalMarksController.text) ?? 0,
+                  internalExamTotalMarks:
+                      double.tryParse(totalMarksController.text) ?? 100,
+                  teacherEvaluationScore:
+                      double.tryParse(evalScoreController.text) ?? 0,
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Marksheet overridden successfully'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(e.toString())));
+                }
+              }
+            },
+            child: const Text('Override'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _WeightSlider extends StatelessWidget {
@@ -791,6 +1049,46 @@ class _WeightSlider extends StatelessWidget {
         ),
         const SizedBox(height: 4),
       ],
+    );
+  }
+}
+
+class _StatusOption extends StatelessWidget {
+  final String label;
+  final String value;
+  final String selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _StatusOption({
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = selected == value;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : color,
+          ),
+        ),
+      ),
     );
   }
 }
