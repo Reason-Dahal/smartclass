@@ -43,7 +43,7 @@ const createTeacher = async (req, res) => {
 
     const tempPassword = generateTempPassword();
     
-console.log('Temp password for', email, ':', tempPassword);
+
 
     const user = await User.create({
       name,
@@ -190,7 +190,7 @@ const createStudent = async (req, res) => {
     }
 
     const tempPassword = generateTempPassword();
-console.log('Temp password for', email, ':', tempPassword);
+
 
     const user = await User.create({
       name,
