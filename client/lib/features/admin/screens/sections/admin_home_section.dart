@@ -235,7 +235,7 @@ class AdminHomeSection extends ConsumerWidget {
                         items: studentsAsync
                             .map(
                               (s) => DropdownMenuItem(
-                                value: s.id,
+                                value: s.profileId,
                                 child: Text(
                                   s.name,
                                   overflow: TextOverflow.ellipsis,

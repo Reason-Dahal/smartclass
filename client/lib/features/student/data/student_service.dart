@@ -146,6 +146,22 @@ class StudentService {
     }
   }
 
+  // ─── Final Result ─────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> getMyFinalResults() async {
+    try {
+      final response = await _dio.get(ApiConstants.studentFinalResults);
+      return response.data['data'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── NOTIFICATIONS ───────────────────────────────────────────────
 
   Future<List<NotificationModel>> getMyNotifications() async {

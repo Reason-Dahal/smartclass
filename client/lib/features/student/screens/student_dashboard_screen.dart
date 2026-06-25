@@ -13,6 +13,7 @@ import 'tabs/assignments_tab.dart';
 import 'tabs/notes_tab.dart';
 import 'tabs/marks_tab.dart';
 import 'tabs/evaluation_tab.dart';
+import 'tabs/results_tab.dart';
 
 class StudentDashboardScreen extends ConsumerStatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -55,6 +56,7 @@ class _StudentDashboardScreenState
       const NotesTab(),
       const MarksTab(),
       const EvaluationTab(),
+      const ResultsTab(),
     ];
 
     return Scaffold(
@@ -145,6 +147,11 @@ class _StudentDashboardScreenState
             activeIcon: Icon(Icons.insights),
             label: 'Eval',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.emoji_events_outlined),
+            activeIcon: Icon(Icons.emoji_events),
+            label: 'Results',
+          ),
         ],
       ),
     );
@@ -162,6 +169,8 @@ class _StudentDashboardScreenState
         return 'Marks';
       case 5:
         return 'Evaluation';
+      case 6:
+        return 'Final Results';
       default:
         return AppConstants.appName;
     }
