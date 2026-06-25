@@ -60,9 +60,8 @@ class _EvaluationTabState extends ConsumerState<EvaluationTab> {
                 isExpanded: true,
                 value: _selectedCourseId,
                 items: list.map((c) {
-                  final course = c.course as Map<String, dynamic>;
-                  final courseId = course['_id'] as String? ?? '';
-                  final subjectName = course['subjectName'] as String? ?? '';
+                  final courseId = c.course['_id'] as String? ?? '';
+                  final subjectName = c.course['subjectName'] as String? ?? '';
                   return DropdownMenuItem(
                     value: courseId,
                     child: Text(
@@ -75,14 +74,12 @@ class _EvaluationTabState extends ConsumerState<EvaluationTab> {
                 onChanged: (val) {
                   if (val != null) {
                     final selected = list.firstWhere(
-                      (c) => (c.course as Map<String, dynamic>)['_id'] == val,
+                      (c) => c.course['_id'] == val,
                     );
                     setState(() {
                       _selectedCourseId = val;
                       _selectedCourseName =
-                          (selected.course
-                                  as Map<String, dynamic>)['subjectName']
-                              as String?;
+                          selected.course['subjectName'] as String?;
                     });
                   }
                 },
