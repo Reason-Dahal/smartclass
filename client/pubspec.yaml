@@ -1,37 +1,36 @@
 name: client
-description: "A new Flutter project."
+description: "SmartClass — Academic Management System"
 
-publish_to: 'none' 
+publish_to: 'none'
 
 version: 1.0.0+1
 
 environment:
   sdk: ^3.11.5
 
-
 dependencies:
   flutter:
     sdk: flutter
-  
-    # State management
+
+  # State management
   flutter_riverpod: ^2.6.1
 
-  # HTTP client — for calling our Node.js API
+  # HTTP client
   dio: ^5.8.0+1
 
-  # Secure storage — for saving JWT token safely
+  # Secure storage
   flutter_secure_storage: ^9.2.4
 
   # Navigation
   go_router: ^14.6.3
 
-  # Local storage for simple data
+  # Local storage
   shared_preferences: ^2.3.5
 
   # Form validation
   reactive_forms: ^17.0.0
 
-  # File picker — for assignment submissions
+  # File picker
   file_picker: ^10.1.9
 
   # Toast notifications
@@ -43,7 +42,7 @@ dependencies:
   # Cached network image
   cached_network_image: ^3.4.1
 
-  #Url
+  # URL launcher
   url_launcher: ^6.3.1
 
   cupertino_icons: ^1.0.8
@@ -51,16 +50,18 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.3
 
-
-  flutter_lints: ^6.0.0
-
-
-
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icons/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#1F4E79"
+  adaptive_icon_foreground: "assets/icons/app_icon.png"
 
 flutter:
-
-
   uses-material-design: true
-
-
+  assets:
+    - assets/icons/
