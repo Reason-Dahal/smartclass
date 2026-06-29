@@ -219,6 +219,24 @@ class AdminService {
     }
   }
 
+  Future<List<BatchModel>> getBatchesByProgram(String programId) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.programs}/$programId/batches',
+      );
+      final batches = response.data['data']['batches'] as List;
+      return batches.map((e) => BatchModel.fromJson(e)).toList();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── REPORTS ─────────────────────────────────────────────────────
 
   Future<SystemReportModel> getReports() async {
