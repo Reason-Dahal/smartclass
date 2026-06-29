@@ -42,6 +42,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    tempPassword: {
+      type: String,
+      default: null,
+      select: false,  // Never included in standard queries
+    },
   },
   {
     timestamps: true,

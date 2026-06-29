@@ -15,6 +15,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// V2 — Health check (no auth, no DB query)
+app.get('/api/v1/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    data: { status: 'ok', timestamp: new Date().toISOString() }
+  });
+});
+
 // Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);

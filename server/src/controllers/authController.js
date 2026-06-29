@@ -113,6 +113,7 @@ const changePassword = async (req, res) => {
 
     user.password = newPassword;
     user.mustChangePassword = false;
+    user.tempPassword = null;
     await user.save();
 
     res.status(200).json({

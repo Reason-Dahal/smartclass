@@ -51,6 +51,7 @@ const createTeacher = async (req, res) => {
       password: tempPassword,
       role: 'teacher',
       mustChangePassword: true,
+      tempPassword: tempPassword,
     });
 
     const teacher = await Teacher.create({
@@ -198,6 +199,7 @@ const createStudent = async (req, res) => {
       password: tempPassword,
       role: 'student',
       mustChangePassword: true,
+      tempPassword: tempPassword,
     });
 
     const student = await Student.create({
