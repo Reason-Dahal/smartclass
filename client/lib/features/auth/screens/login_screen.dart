@@ -6,6 +6,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/app_router.dart';
 import '../data/auth_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // State provider for login loading state
 final loginLoadingProvider = StateProvider<bool>((ref) => false);
@@ -23,8 +24,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String? _errorMessage;
+  String _appVersion = '';
 
   final _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
 
   @override
   void dispose() {
@@ -71,6 +79,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ref.read(loginLoadingProvider.notifier).state = false;
       }
     }
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    setState(() {
+      _appVersion = 'v${info.version}';
+    });
   }
 
   @override
@@ -204,6 +219,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             onPressed: _login,
                             child: const Text('Log in'),
                           ),
+                    Text(
+                      _appVersion,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF888888),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
