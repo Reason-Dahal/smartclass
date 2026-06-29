@@ -47,11 +47,17 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
+  # V2 new packages
+  flutter_pdfview: ^1.4.4
+  path_provider: ^2.1.5
+  package_info_plus: ^8.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
   flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.1
 
 flutter_launcher_icons:
   android: true
@@ -65,3 +71,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/icons/app_icon.png
+  android: true
+  ios: false

@@ -1,3 +1,4 @@
+import 'package:client/shared/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/screens/login_screen.dart';
@@ -16,7 +17,7 @@ class AppRouter {
   static const String studentDashboard = '/student';
 
   static final GoRouter router = GoRouter(
-    initialLocation: login,
+    initialLocation: '/splash',
     redirect: (context, state) async {
       final token = await SecureStorage.getToken();
       final isLoginPage = state.matchedLocation == login;
@@ -53,6 +54,10 @@ class AppRouter {
       GoRoute(
         path: studentDashboard,
         builder: (context, state) => const StudentDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
       ),
     ],
     errorBuilder: (context, state) =>
