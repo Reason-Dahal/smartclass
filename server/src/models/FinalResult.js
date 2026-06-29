@@ -2,39 +2,30 @@ const mongoose = require('mongoose');
 
 const finalResultSchema = new mongoose.Schema(
   {
-    studentId: {
+    programId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Student',
-      required: true,
+      ref: 'Program',
+      required: [true, 'Program is required'],
     },
     term: {
       type: Number,
-      required: true,
+      required: [true, 'Term is required'],
+      min: 1,
     },
-    overallStatus: {
+    fileUrl: {
       type: String,
-      enum: ['pass', 'fail'],
-      required: true,
+      required: [true, 'Result file URL is required'],
     },
-    courseResults: [
-      {
-        courseId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: 'Course',
-          required: true,
-        },
-        status: {
-          type: String,
-          enum: ['pass', 'fail'],
-          required: true,
-        },
-      },
-    ],
+    fileType: {
+      type: String,
+      enum: ['pdf', 'docx'],
+      required: [true, 'File type is required'],
+    },
     publishedDate: {
       type: Date,
-      required: true,
+      default: Date.now,
     },
-    enteredBy: {
+    uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
@@ -45,7 +36,9 @@ const finalResultSchema = new mongoose.Schema(
   }
 );
 
-finalResultSchema.index({ studentId: 1, term: 1 }, { unique: true });
+// One result file per program per term
+// Upsert on this index allows admin to overwrite a result for the same term
+finalResultSchema.index({ programId: 1, term: 1 }, { unique: true });
 
 const FinalResult = mongoose.model('FinalResult', finalResultSchema);
 

@@ -33,13 +33,38 @@ const courseSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    usageCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    lastUsedAt: {
+      type: Date,
+      default: null,
+    },
   },
+
+  
   {
     timestamps: true,
   }
 );
 
 courseSchema.index({ programId: 1, term: 1, subjectName: 1 }, { unique: true });
+
+courseSchema.statics.incrementUsage = async function (courseId) {
+  try {
+    await this.findByIdAndUpdate(courseId, {
+      $inc: { usageCount: 1 },
+      $set: { lastUsedAt: new Date() },
+    });
+  } catch (err) {
+    // Fire and forget — usage tracking never blocks the main operation
+    console.error('Usage increment failed:', err.message);
+  }
+};
+
+
 
 const Course = mongoose.model('Course', courseSchema);
 
