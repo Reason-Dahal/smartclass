@@ -7,6 +7,7 @@ import '../../features/admin/screens/admin_dashboard_screen.dart';
 import '../../features/teacher/screens/teacher_dashboard_screen.dart';
 import '../../features/student/screens/student_dashboard_screen.dart';
 import '../storage/secure_storage.dart';
+import '../../shared/screens/pdf_viewer_screen.dart';
 // import '../constants/app_constants.dart';
 
 class AppRouter {
@@ -58,6 +59,17 @@ class AppRouter {
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/pdf-viewer',
+        builder: (context, state) {
+          final params = state.uri.queryParameters;
+          return PDFViewerScreen(
+            fileUrl: params['url'] ?? '',
+            title: params['title'] ?? 'Document',
+            fileType: params['type'] ?? 'pdf',
+          );
+        },
       ),
     ],
     errorBuilder: (context, state) =>
