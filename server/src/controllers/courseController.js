@@ -80,7 +80,7 @@ const createCourse = async (req, res) => {
   }
 };
 
-// ─── ADMIN: UPDATE,DEACTIVATE COURSE ─────────────────────────────────────────
+// ─── ADMIN: UPDATE,DEACTIVATE,GET COURSE ─────────────────────────────────────────
 
 const updateCourse = async (req, res) => {
   try {
@@ -139,6 +139,28 @@ const deactivateCourse = async (req, res) => {
     res.status(200).json({
       success: true,
       data: { message: 'Course deactivated successfully' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const getCourses = async (req, res) => {
+  try {
+    const courses = await Course.find()
+      .populate('programId', 'name type')
+      .populate({
+        path: 'teacherId',
+        populate: { path: 'userId', select: 'name' },
+      })
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: { courses },
     });
   } catch (error) {
     res.status(500).json({
@@ -402,6 +424,7 @@ module.exports = {
   createCourse,
   updateCourse,
   deactivateCourse,
+  getCourses,
   getTeacherCourses,
   toggleEvaluation,
   getStudentCourses,

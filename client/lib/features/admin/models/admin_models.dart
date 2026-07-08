@@ -91,6 +91,7 @@ class BatchModel {
   final int currentTerm;
   final String programId;
   final String programName;
+  final bool isActive;
 
   BatchModel({
     required this.id,
@@ -99,6 +100,7 @@ class BatchModel {
     required this.currentTerm,
     required this.programId,
     required this.programName,
+    required this.isActive,
   });
 
   factory BatchModel.fromJson(Map<String, dynamic> json) {
@@ -110,6 +112,7 @@ class BatchModel {
       currentTerm: json['currentTerm'] ?? 1,
       programId: program['_id'] ?? '',
       programName: program['name'] ?? '',
+      isActive: json['isActive'] ?? true,
     );
   }
 }
@@ -148,6 +151,48 @@ class SystemReportModel {
       totalAssignments: assignments['totalAssignments'] ?? 0,
       totalSubmissions: assignments['totalSubmissions'] ?? 0,
       submissionRate: assignments['submissionRate'] ?? '0%',
+    );
+  }
+}
+
+class CourseModel {
+  final String id;
+  final String subjectName;
+  final int term;
+  final bool isElective;
+  final bool isActive;
+  final String programId;
+  final String programName;
+  final String teacherId;
+  final String teacherName;
+
+  CourseModel({
+    required this.id,
+    required this.subjectName,
+    required this.term,
+    required this.isElective,
+    required this.isActive,
+    required this.programId,
+    required this.programName,
+    required this.teacherId,
+    required this.teacherName,
+  });
+
+  factory CourseModel.fromJson(Map<String, dynamic> json) {
+    final program = json['programId'] as Map<String, dynamic>? ?? {};
+    final teacher = json['teacherId'] as Map<String, dynamic>? ?? {};
+    final teacherUser = teacher['userId'] as Map<String, dynamic>? ?? {};
+
+    return CourseModel(
+      id: json['_id'] ?? '',
+      subjectName: json['subjectName'] ?? '',
+      term: json['term'] ?? 1,
+      isElective: json['isElective'] ?? false,
+      isActive: json['isActive'] ?? true,
+      programId: program['_id'] ?? '',
+      programName: program['name'] ?? '',
+      teacherId: teacher['_id'] ?? '',
+      teacherName: teacherUser['name'] ?? '',
     );
   }
 }

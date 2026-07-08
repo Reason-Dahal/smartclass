@@ -11,6 +11,7 @@ import 'sections/admin_teachers_section.dart';
 import 'sections/admin_students_section.dart';
 import 'sections/admin_programs_section.dart';
 import 'sections/admin_reports_section.dart';
+import 'sections/admin_courses_section.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -109,6 +110,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return 'Programs & Batches';
       case 4:
         return 'Reports';
+      case 5:
+        return 'Courses';
       default:
         return AppConstants.appName;
     }
@@ -124,6 +127,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return const AdminProgramsSection();
       case 4:
         return const AdminReportsSection();
+      case 5:
+        return const AdminCoursesSection();
       default:
         return AdminHomeSection(
           userName: _userName,

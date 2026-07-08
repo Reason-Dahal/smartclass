@@ -3,19 +3,22 @@ const router = express.Router();
 const {
   createCourse,
   updateCourse,
+  getCourses,
+  deactivateCourse,
   getTeacherCourses,
   toggleEvaluation,
   getStudentCourses,
   getAvailableElectives,
   enrollElective,
-  deactivateCourse, 
+   
 } = require('../controllers/courseController');
 const { protect, authorize } = require('../middleware/auth');
 
 // Admin routes
 router.post('/', protect, authorize('admin'), createCourse);
 router.patch('/:id', protect, authorize('admin'), updateCourse);
-router.delete('/:id',     protect, authorize('admin'), deactivateCourse);
+router.delete('/:id', protect, authorize('admin'), deactivateCourse);
+router.get('/', protect, authorize('admin'), getCourses);
 
 
 // Teacher routes

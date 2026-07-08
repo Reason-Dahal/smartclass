@@ -284,6 +284,23 @@ class AdminService {
     }
   }
 
+  Future<void> reactivateProgram(String programId) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.programs}/$programId',
+        data: {'isActive': true},
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── BATCHES ─────────────────────────────────────────────────────
 
   Future<List<BatchModel>> getAllBatches() async {
@@ -393,6 +410,23 @@ class AdminService {
     }
   }
 
+  Future<void> reactivateBatch(String batchId) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.programs}/batches/$batchId',
+        data: {'isActive': true},
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── REPORTS ─────────────────────────────────────────────────────
 
   Future<SystemReportModel> getReports() async {
@@ -480,6 +514,7 @@ class AdminService {
     String? subjectName,
     String? teacherId,
     bool? isElective,
+    bool? isActive,
   }) async {
     try {
       await _dio.patch(
@@ -488,6 +523,7 @@ class AdminService {
           if (subjectName != null) 'subjectName': subjectName,
           if (teacherId != null) 'teacherId': teacherId,
           if (isElective != null) 'isElective': isElective,
+          if (isActive != null) 'isActive': isActive,
         },
       );
     } on DioException catch (e) {
@@ -504,6 +540,22 @@ class AdminService {
   Future<void> deactivateCourse(String courseId) async {
     try {
       await _dio.delete('${ApiConstants.courses}/$courseId');
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<List<CourseModel>> getCourses() async {
+    try {
+      final response = await _dio.get(ApiConstants.courses);
+      final courses = response.data['data']['courses'] as List;
+      return courses.map((e) => CourseModel.fromJson(e)).toList();
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(

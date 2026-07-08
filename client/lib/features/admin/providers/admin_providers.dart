@@ -24,6 +24,10 @@ final adminReportsProvider = FutureProvider<SystemReportModel>((ref) async {
   return ref.read(adminServiceProvider).getReports();
 });
 
+final adminCoursesProvider = FutureProvider<List<CourseModel>>((ref) async {
+  return ref.read(adminServiceProvider).getCourses();
+});
+
 final evaluationConfigProvider = FutureProvider<Map<String, dynamic>>((
   ref,
 ) async {

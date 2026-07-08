@@ -549,7 +549,7 @@ const createProgram = async (req, res) => {
 
 const getPrograms = async (req, res) => {
   try {
-    const programs = await Program.find({ isActive: true });
+    const programs = await Program.find()
 
     res.status(200).json({
       success: true,
@@ -679,6 +679,7 @@ const getAllBatches = async (req, res) => {
   try {
     const batches = await Batch.find()
       .populate('programId', 'name type totalTerms');
+    
 
     res.status(200).json({
       success: true,
@@ -763,7 +764,7 @@ const promoteBatch = async (req, res) => {
 // ─── UPDATE BATCH ────────────────────────────────────────────────
 const updateBatch = async (req, res) => {
   try {
-    const { name, intakeYear } = req.body;
+    const { name, intakeYear, isActive } = req.body;
 
     const batch = await Batch.findById(req.params.id);
     if (!batch) {
@@ -775,6 +776,7 @@ const updateBatch = async (req, res) => {
 
     if (name)       batch.name       = name.trim();
     if (intakeYear) batch.intakeYear = intakeYear;
+    if (isActive !== undefined) batch.isActive = isActive;
     await batch.save();
 
     res.status(200).json({
