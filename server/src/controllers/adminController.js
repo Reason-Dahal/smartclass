@@ -100,7 +100,7 @@ const createTeacher = async (req, res) => {
 const getTeachers = async (req, res) => {
   try {
     const teachers = await Teacher.find()
-      .populate('userId', 'name email status createdAt');
+      .populate('userId', 'name email role status createdAt');
 
     res.status(200).json({
       success: true,
@@ -116,7 +116,7 @@ const getTeachers = async (req, res) => {
 
 const updateTeacher = async (req, res) => {
   try {
-    const { name, department } = req.body;
+    const { name, email, department } = req.body;
 
     const teacher = await Teacher.findById(req.params.id);
     if (!teacher) {
@@ -126,18 +126,116 @@ const updateTeacher = async (req, res) => {
       });
     }
 
-    if (name) {
-      await User.findByIdAndUpdate(teacher.userId, { name });
+    // Check email not taken by another user
+    if (email) {
+      const existing = await User.findOne({
+        email: email.toLowerCase().trim(),
+        _id: { $ne: teacher.userId },
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'DUPLICATE_EMAIL', message: 'Email already in use' },
+        });
+      }
     }
 
+    // Update User document
+    const userUpdate = {};
+    if (name)  userUpdate.name  = name.trim();
+    if (email) userUpdate.email = email.toLowerCase().trim();
+    if (Object.keys(userUpdate).length > 0) {
+      await User.findByIdAndUpdate(teacher.userId, userUpdate);
+    }
+
+    // Update Teacher document
     if (department) {
-      teacher.department = department;
+      teacher.department = department.trim();
       await teacher.save();
     }
 
     res.status(200).json({
       success: true,
       data: { message: 'Teacher updated successfully' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── EDIT TEACHER ────────────────────────────────────────────────
+const editTeacher = async (req, res) => {
+  try {
+    const { name, email, department } = req.body;
+
+    const teacher = await Teacher.findById(req.params.id).populate('userId');
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Teacher not found' },
+      });
+    }
+
+    // Update User document (name and email)
+    if (name || email) {
+      const updateData = {};
+      if (name)  updateData.name  = name.trim();
+      if (email) updateData.email = email.toLowerCase().trim();
+
+      // Check email is not already taken by another user
+      if (email) {
+        const existing = await User.findOne({
+          email: email.toLowerCase().trim(),
+          _id: { $ne: teacher.userId._id },
+        });
+        if (existing) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'DUPLICATE_EMAIL', message: 'Email already in use' },
+          });
+        }
+      }
+
+      await User.findByIdAndUpdate(teacher.userId._id, updateData);
+    }
+
+    // Update Teacher document (department)
+    if (department) {
+      teacher.department = department.trim();
+      await teacher.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Teacher updated successfully' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── DEACTIVATE TEACHER ──────────────────────────────────────────
+const deactivateTeacher = async (req, res) => {
+  try {
+    const teacher = await Teacher.findById(req.params.id);
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Teacher not found' },
+      });
+    }
+
+    await User.findByIdAndUpdate(teacher.userId, { status: 'inactive' });
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Teacher deactivated successfully' },
     });
   } catch (error) {
     res.status(500).json({
@@ -254,7 +352,7 @@ const getStudents = async (req, res) => {
     if (req.query.batchId) filter.batchId = req.query.batchId;
 
     const students = await Student.find(filter)
-      .populate('userId', 'name email status createdAt')
+      .populate('userId', 'name email role status createdAt')
       .populate('programId', 'name type')
       .populate('batchId', 'name currentTerm intakeYear');
 
@@ -272,7 +370,7 @@ const getStudents = async (req, res) => {
 
 const updateStudent = async (req, res) => {
   try {
-    const { name, rollNumber } = req.body;
+    const { name, email, rollNumber, programId, batchId } = req.body;
 
     const student = await Student.findById(req.params.id);
     if (!student) {
@@ -282,14 +380,47 @@ const updateStudent = async (req, res) => {
       });
     }
 
-    if (name) {
-      await User.findByIdAndUpdate(student.userId, { name });
+    // Check email not taken by another user
+    if (email) {
+      const existing = await User.findOne({
+        email: email.toLowerCase().trim(),
+        _id: { $ne: student.userId },
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'DUPLICATE_EMAIL', message: 'Email already in use' },
+        });
+      }
     }
 
+    // Check roll number not taken by another student
     if (rollNumber) {
-      student.rollNumber = rollNumber;
-      await student.save();
+      const existing = await Student.findOne({
+        rollNumber: rollNumber.trim(),
+        _id: { $ne: student._id },
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'DUPLICATE_ROLL', message: 'Roll number already in use' },
+        });
+      }
     }
+
+    // Update User document
+    const userUpdate = {};
+    if (name)  userUpdate.name  = name.trim();
+    if (email) userUpdate.email = email.toLowerCase().trim();
+    if (Object.keys(userUpdate).length > 0) {
+      await User.findByIdAndUpdate(student.userId, userUpdate);
+    }
+
+    // Update Student document
+    if (rollNumber) student.rollNumber = rollNumber.trim();
+    if (programId)  student.programId  = programId;
+    if (batchId)    student.batchId    = batchId;
+    await student.save();
 
     res.status(200).json({
       success: true,
@@ -302,7 +433,29 @@ const updateStudent = async (req, res) => {
     });
   }
 };
+const deactivateStudent = async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Student not found' },
+      });
+    }
 
+    await User.findByIdAndUpdate(student.userId, { status: 'inactive' });
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Student deactivated successfully' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
 // ─── ACCOUNT STATUS ───────────────────────────────────────────────
 
 const updateUserStatus = async (req, res) => {
@@ -429,6 +582,31 @@ const updateProgram = async (req, res) => {
     res.status(200).json({
       success: true,
       data: { program },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const deactivateProgram = async (req, res) => {
+  try {
+    const program = await Program.findById(req.params.id);
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Program not found' },
+      });
+    }
+
+    program.isActive = false;
+    await program.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Program deactivated successfully' },
     });
   } catch (error) {
     res.status(500).json({
@@ -581,6 +759,64 @@ const promoteBatch = async (req, res) => {
     });
   }
 };
+
+// ─── UPDATE BATCH ────────────────────────────────────────────────
+const updateBatch = async (req, res) => {
+  try {
+    const { name, intakeYear } = req.body;
+
+    const batch = await Batch.findById(req.params.id);
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Batch not found' },
+      });
+    }
+
+    if (name)       batch.name       = name.trim();
+    if (intakeYear) batch.intakeYear = intakeYear;
+    await batch.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Batch updated successfully' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── DEACTIVATE BATCH ────────────────────────────────────────────
+const deactivateBatch = async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.id);
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Batch not found' },
+      });
+    }
+
+    batch.isActive = false;
+    await batch.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Batch deactivated successfully' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+
+
 
 const resetUserPassword = async (req, res) => {
   try {
@@ -941,4 +1177,10 @@ module.exports = {
   uploadFinalResults,
   getEvaluationConfig, updateEvaluationConfig,
   getSystemReports,
+  editTeacher,
+  deactivateTeacher,
+  deactivateStudent,
+  updateBatch,
+  deactivateBatch,
+  deactivateProgram
 };

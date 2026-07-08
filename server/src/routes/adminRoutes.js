@@ -4,9 +4,11 @@ const {
   createTeacher,
   getTeachers,
   updateTeacher,
+  deactivateTeacher,
   createStudent,
   getStudents,
   updateStudent,
+  deactivateStudent,
   updateUserStatus,
   resetUserPassword,
   manualEnroll,
@@ -21,11 +23,14 @@ router.use(authorize('admin'));
 router.post('/teachers', createTeacher);
 router.get('/teachers', getTeachers);
 router.patch('/teachers/:id', updateTeacher);
+router.delete('/teachers/:id',   deactivateTeacher);
+
 
 // Student routes
 router.post('/students', createStudent);
 router.get('/students', getStudents);
 router.patch('/students/:id', updateStudent);
+router.delete('/students/:id',   deactivateStudent);
 
 
 // User status

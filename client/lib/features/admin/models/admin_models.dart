@@ -1,11 +1,16 @@
 class AdminUserModel {
   final String id;
-  final String profileId; // Teacher/Student profile _id
+  final String profileId;
   final String name;
   final String email;
   final String role;
   final String status;
   final DateTime createdAt;
+  // V2 additions
+  final String? department; // teachers only
+  final String? rollNumber; // students only
+  final String? programId; // students only
+  final String? batchId; // students only
 
   AdminUserModel({
     required this.id,
@@ -15,13 +20,29 @@ class AdminUserModel {
     required this.role,
     required this.status,
     required this.createdAt,
+    this.department,
+    this.rollNumber,
+    this.programId,
+    this.batchId,
   });
 
   factory AdminUserModel.fromJson(Map<String, dynamic> json) {
-    final userId = json['userId'] as Map<String, dynamic>? ?? json;
+    final userIdRaw = json['userId'];
+    final userId = userIdRaw is Map<String, dynamic> ? userIdRaw : json;
+
+    // programId and batchId may be populated objects or plain strings
+    final programRaw = json['programId'];
+    final batchRaw = json['batchId'];
+    final programId = programRaw is Map
+        ? programRaw['_id'] as String?
+        : programRaw as String?;
+    final batchId = batchRaw is Map
+        ? batchRaw['_id'] as String?
+        : batchRaw as String?;
+
     return AdminUserModel(
       id: userId['_id'] ?? json['_id'] ?? '',
-      profileId: json['_id'] ?? '', // Teacher/Student profile _id
+      profileId: json['_id'] ?? '',
       name: userId['name'] ?? '',
       email: userId['email'] ?? '',
       role: userId['role'] ?? '',
@@ -29,6 +50,10 @@ class AdminUserModel {
       createdAt:
           DateTime.tryParse(userId['createdAt'] ?? json['createdAt'] ?? '') ??
           DateTime.now(),
+      department: json['department'] as String?,
+      rollNumber: json['rollNumber'] as String?,
+      programId: programId,
+      batchId: batchId,
     );
   }
 }

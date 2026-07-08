@@ -80,11 +80,11 @@ const createCourse = async (req, res) => {
   }
 };
 
-// ─── ADMIN: UPDATE COURSE ─────────────────────────────────────────
+// ─── ADMIN: UPDATE,DEACTIVATE COURSE ─────────────────────────────────────────
 
 const updateCourse = async (req, res) => {
   try {
-    const { teacherId, subjectName, isActive } = req.body;
+    const { teacherId, subjectName, isActive,isElective } = req.body;
 
     const course = await Course.findById(req.params.id);
     if (!course) {
@@ -106,6 +106,7 @@ const updateCourse = async (req, res) => {
     }
 
     if (subjectName) course.subjectName = subjectName;
+    if (isElective !== undefined) course.isElective = isElective;
     if (isActive !== undefined) course.isActive = isActive;
 
     await course.save();
@@ -113,6 +114,31 @@ const updateCourse = async (req, res) => {
     res.status(200).json({
       success: true,
       data: { course },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+// ─── DEACTIVATE COURSE ───────────────────────────────────────────
+const deactivateCourse = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    course.isActive = false;
+    await course.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Course deactivated successfully' },
     });
   } catch (error) {
     res.status(500).json({
@@ -375,6 +401,7 @@ const enrollElective = async (req, res) => {
 module.exports = {
   createCourse,
   updateCourse,
+  deactivateCourse,
   getTeacherCourses,
   toggleEvaluation,
   getStudentCourses,

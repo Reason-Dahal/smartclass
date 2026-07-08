@@ -46,6 +46,46 @@ class AdminService {
     }
   }
 
+  Future<void> editTeacher({
+    required String profileId,
+    String? name,
+    String? email,
+    String? department,
+  }) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.teachers}/$profileId',
+        data: {
+          if (name != null) 'name': name,
+          if (email != null) 'email': email,
+          if (department != null) 'department': department,
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> deactivateTeacher(String profileId) async {
+    try {
+      await _dio.delete('${ApiConstants.teachers}/$profileId');
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── STUDENTS ────────────────────────────────────────────────────
 
   Future<List<AdminUserModel>> getStudents() async {
@@ -128,6 +168,50 @@ class AdminService {
     }
   }
 
+  Future<void> editStudent({
+    required String profileId,
+    String? name,
+    String? email,
+    String? rollNumber,
+    String? programId,
+    String? batchId,
+  }) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.students}/$profileId',
+        data: {
+          if (name != null) 'name': name,
+          if (email != null) 'email': email,
+          if (rollNumber != null) 'rollNumber': rollNumber,
+          if (programId != null) 'programId': programId,
+          if (batchId != null) 'batchId': batchId,
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> deactivateStudent(String profileId) async {
+    try {
+      await _dio.delete('${ApiConstants.students}/$profileId');
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── PROGRAMS ────────────────────────────────────────────────────
 
   Future<List<ProgramModel>> getPrograms() async {
@@ -155,6 +239,40 @@ class AdminService {
         ApiConstants.programs,
         data: {'name': name, 'type': type},
       );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> editProgram({
+    required String programId,
+    required String name,
+  }) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.programs}/$programId',
+        data: {'name': name},
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> deactivateProgram(String programId) async {
+    try {
+      await _dio.delete('${ApiConstants.programs}/$programId');
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(
@@ -237,6 +355,44 @@ class AdminService {
     }
   }
 
+  Future<void> editBatch({
+    required String batchId,
+    String? name,
+    int? intakeYear,
+  }) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.programs}/batches/$batchId',
+        data: {
+          if (name != null) 'name': name,
+          if (intakeYear != null) 'intakeYear': intakeYear,
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> deactivateBatch(String batchId) async {
+    try {
+      await _dio.delete('${ApiConstants.programs}/batches/$batchId');
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── REPORTS ─────────────────────────────────────────────────────
 
   Future<SystemReportModel> getReports() async {
@@ -308,6 +464,46 @@ class AdminService {
           'isElective': isElective,
         },
       );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> editCourse({
+    required String courseId,
+    String? subjectName,
+    String? teacherId,
+    bool? isElective,
+  }) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.courses}/$courseId',
+        data: {
+          if (subjectName != null) 'subjectName': subjectName,
+          if (teacherId != null) 'teacherId': teacherId,
+          if (isElective != null) 'isElective': isElective,
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> deactivateCourse(String courseId) async {
+    try {
+      await _dio.delete('${ApiConstants.courses}/$courseId');
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(

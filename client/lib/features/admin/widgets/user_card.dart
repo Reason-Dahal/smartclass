@@ -27,11 +27,32 @@ class UserCard extends ConsumerWidget {
           user.name,
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
-        subtitle: Text(user.email),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(user.email),
+            if (user.department != null)
+              Text(
+                user.department!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            if (user.rollNumber != null)
+              Text(
+                'Roll: ${user.rollNumber}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+          ],
+        ),
+        isThreeLine: user.department != null || user.rollNumber != null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Status badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -48,14 +69,13 @@ class UserCard extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 4),
-            // Action button
             IconButton(
               icon: const Icon(
                 Icons.more_vert,
                 color: AppColors.textMuted,
                 size: 20,
               ),
-              onPressed: () => _showStatusOptions(context, ref),
+              onPressed: () => _showOptions(context, ref),
             ),
           ],
         ),
@@ -74,7 +94,7 @@ class UserCard extends ConsumerWidget {
     }
   }
 
-  void _showStatusOptions(BuildContext context, WidgetRef ref) {
+  void _showOptions(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -98,13 +118,21 @@ class UserCard extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Change account status:',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 8),
 
-            // Active
+            // Edit
+            ListTile(
+              leading: const Icon(
+                Icons.edit_outlined,
+                color: AppColors.primary,
+              ),
+              title: const Text('Edit'),
+              onTap: () {
+                Navigator.pop(context);
+                _showEditDialog(context, ref);
+              },
+            ),
+
+            // Status options
             if (user.status != 'active')
               ListTile(
                 leading: const Icon(
@@ -117,8 +145,6 @@ class UserCard extends ConsumerWidget {
                   await _updateStatus(context, ref, 'active');
                 },
               ),
-
-            // Suspend
             if (user.status != 'suspended')
               ListTile(
                 leading: const Icon(
@@ -132,21 +158,129 @@ class UserCard extends ConsumerWidget {
                 },
               ),
 
-            // Inactive
+            // Deactivate
             if (user.status != 'inactive')
               ListTile(
                 leading: const Icon(
-                  Icons.pause_circle_outline,
+                  Icons.person_off_outlined,
                   color: AppColors.textMuted,
                 ),
-                title: const Text('Set Inactive'),
+                title: const Text('Deactivate'),
+                subtitle: const Text(
+                  'Soft delete — account is preserved',
+                  style: TextStyle(fontSize: 11),
+                ),
                 onTap: () async {
                   Navigator.pop(context);
-                  await _updateStatus(context, ref, 'inactive');
+                  await _deactivate(context, ref);
                 },
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context, WidgetRef ref) {
+    final nameController = TextEditingController(text: user.name);
+    final emailController = TextEditingController(text: user.email);
+    final departmentController = TextEditingController(
+      text: user.department ?? '',
+    );
+    final rollController = TextEditingController(text: user.rollNumber ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit ${user.role == 'teacher' ? 'Teacher' : 'Student'}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 12),
+              // Teacher-specific field
+              if (user.role == 'teacher')
+                TextField(
+                  controller: departmentController,
+                  decoration: const InputDecoration(
+                    labelText: 'Department',
+                    isDense: true,
+                  ),
+                ),
+              // Student-specific field
+              if (user.role == 'student')
+                TextField(
+                  controller: rollController,
+                  decoration: const InputDecoration(
+                    labelText: 'Roll Number',
+                    isDense: true,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                final service = ref.read(adminServiceProvider);
+                if (user.role == 'teacher') {
+                  await service.editTeacher(
+                    profileId: user.profileId,
+                    name: nameController.text.trim(),
+                    email: emailController.text.trim(),
+                    department: departmentController.text.trim(),
+                  );
+                } else {
+                  await service.editStudent(
+                    profileId: user.profileId,
+                    name: nameController.text.trim(),
+                    email: emailController.text.trim(),
+                    rollNumber: rollController.text.trim(),
+                  );
+                }
+                ref.invalidate(adminTeachersProvider);
+                ref.invalidate(adminStudentsProvider);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Updated successfully'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(e.toString())));
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }
@@ -159,16 +293,67 @@ class UserCard extends ConsumerWidget {
     try {
       final service = ref.read(adminServiceProvider);
       await service.updateUserStatus(user.id, status);
-
-      // Refresh both lists since we don't know if
-      // this is a teacher or student card
       ref.invalidate(adminTeachersProvider);
       ref.invalidate(adminStudentsProvider);
-
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Account ${status} successfully'),
+            content: Text('Account $status successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  Future<void> _deactivate(BuildContext context, WidgetRef ref) async {
+    // Confirm before deactivating
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Deactivate Account'),
+        content: Text(
+          'Deactivate ${user.name}? They will not be able to log in. '
+          'This can be reversed by setting the account to Active.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Deactivate',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final service = ref.read(adminServiceProvider);
+      if (user.role == 'teacher') {
+        await service.deactivateTeacher(user.profileId);
+      } else {
+        await service.deactivateStudent(user.profileId);
+      }
+      ref.invalidate(adminTeachersProvider);
+      ref.invalidate(adminStudentsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account deactivated'),
             backgroundColor: AppColors.success,
           ),
         );

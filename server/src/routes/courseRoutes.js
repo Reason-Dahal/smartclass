@@ -8,12 +8,15 @@ const {
   getStudentCourses,
   getAvailableElectives,
   enrollElective,
+  deactivateCourse, 
 } = require('../controllers/courseController');
 const { protect, authorize } = require('../middleware/auth');
 
 // Admin routes
 router.post('/', protect, authorize('admin'), createCourse);
 router.patch('/:id', protect, authorize('admin'), updateCourse);
+router.delete('/:id',     protect, authorize('admin'), deactivateCourse);
+
 
 // Teacher routes
 router.get('/teacher/my-courses', protect, authorize('teacher'), getTeacherCourses);
