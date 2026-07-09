@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/upload_service.dart';
-import '../../data/teacher_service.dart';
 import '../../models/teacher_models.dart';
 import '../../providers/teacher_providers.dart';
 import '../../widgets/course_detail_card.dart';
@@ -29,14 +28,103 @@ class TeacherCoursesTab extends ConsumerWidget {
             ),
           );
         }
+
+        // Group by program → term → courses
+        final Map<String, Map<int, List<TeacherCourseModel>>> grouped = {};
+        for (final course in list) {
+          grouped.putIfAbsent(course.programName, () => {});
+          grouped[course.programName]!.putIfAbsent(course.term, () => []);
+          grouped[course.programName]![course.term]!.add(course);
+        }
+
+        final programs = grouped.keys.toList()..sort();
+
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: list.length,
-          itemBuilder: (context, index) {
-            final course = list[index];
-            return CourseDetailCard(
-              course: course,
-              onTap: () => _showCourseActions(context, ref, course),
+          itemCount: programs.length,
+          itemBuilder: (context, programIndex) {
+            final programName = programs[programIndex];
+            final termMap = grouped[programName]!;
+            final terms = termMap.keys.toList()..sort();
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: AppColors.borderLight),
+              ),
+              child: ExpansionTile(
+                initiallyExpanded: true,
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.infoLight,
+                  child: Text(
+                    programName.isNotEmpty ? programName[0].toUpperCase() : 'P',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  programName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                subtitle: Text(
+                  '${terms.length} term${terms.length > 1 ? 's' : ''} · '
+                  '${termMap.values.fold(0, (s, l) => s + l.length)} course${termMap.values.fold(0, (s, l) => s + l.length) > 1 ? 's' : ''}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                children: terms.map((term) {
+                  final termCourses = termMap[term]!;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Term header
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 3,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Term $term',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Courses under this term
+                      ...termCourses.map(
+                        (course) => Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                          child: CourseDetailCard(
+                            course: course,
+                            onTap: () =>
+                                _showCourseActions(context, ref, course),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
             );
           },
         );

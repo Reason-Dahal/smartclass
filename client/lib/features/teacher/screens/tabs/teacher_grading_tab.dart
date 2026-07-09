@@ -23,25 +23,111 @@ class TeacherGradingTab extends ConsumerWidget {
             ),
           );
         }
+
+        // Group by program → term → courses
+        final Map<String, Map<int, List<TeacherCourseModel>>> grouped = {};
+        for (final course in list) {
+          grouped.putIfAbsent(course.programName, () => {});
+          grouped[course.programName]!.putIfAbsent(course.term, () => []);
+          grouped[course.programName]![course.term]!.add(course);
+        }
+
+        final programs = grouped.keys.toList()..sort();
+
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: list.length,
-          itemBuilder: (context, index) {
-            final course = list[index];
+          itemCount: programs.length,
+          itemBuilder: (context, programIndex) {
+            final programName = programs[programIndex];
+            final termMap = grouped[programName]!;
+            final terms = termMap.keys.toList()..sort();
+
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: AppColors.borderLight),
+              ),
+              child: ExpansionTile(
+                initiallyExpanded: true,
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.infoLight,
+                  child: Text(
+                    programName.isNotEmpty ? programName[0].toUpperCase() : 'P',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
                 title: Text(
-                  course.subjectName,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  programName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
-                subtitle: Text('${course.programName} · Term ${course.term}'),
-                trailing: const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: AppColors.textMuted,
-                ),
-                onTap: () => _showGradingOptions(context, ref, course),
+                children: terms.map((term) {
+                  final termCourses = termMap[term]!;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Term header
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 3,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Term $term',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Course cards under this term
+                      ...termCourses.map(
+                        (course) => Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                          child: Card(
+                            margin: EdgeInsets.zero,
+                            child: ListTile(
+                              title: Text(
+                                course.subjectName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '${course.studentCount} students',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              trailing: const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 14,
+                                color: AppColors.textMuted,
+                              ),
+                              onTap: () =>
+                                  _showGradingOptions(context, ref, course),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
               ),
             );
           },
