@@ -116,6 +116,7 @@ class NoteModel {
   final String id;
   final String title;
   final String fileUrl;
+  final String fileType; // V2 — 'pdf' or 'docx'
   final String subjectName;
   final DateTime uploadedAt;
 
@@ -123,18 +124,76 @@ class NoteModel {
     required this.id,
     required this.title,
     required this.fileUrl,
+    required this.fileType,
     required this.subjectName,
     required this.uploadedAt,
   });
 
   factory NoteModel.fromJson(Map<String, dynamic> json) {
     final course = json['courseId'] as Map<String, dynamic>? ?? {};
+    final fileUrl = json['fileUrl'] ?? '';
+    final fileType =
+        json['fileType'] ??
+        (fileUrl.toLowerCase().contains('.pdf') ? 'pdf' : 'docx');
     return NoteModel(
       id: json['_id'] ?? '',
       title: json['title'] ?? '',
-      fileUrl: json['fileUrl'] ?? '',
+      fileUrl: fileUrl,
+      fileType: fileType,
       subjectName: course['subjectName'] ?? '',
       uploadedAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+    );
+  }
+}
+
+class NoteGroupModel {
+  final String subjectName;
+  final String courseId;
+  final List<NoteModel> notes;
+
+  NoteGroupModel({
+    required this.subjectName,
+    required this.courseId,
+    required this.notes,
+  });
+
+  factory NoteGroupModel.fromJson(Map<String, dynamic> json) {
+    final notes = (json['notes'] as List? ?? [])
+        .map((n) => NoteModel.fromJson(n))
+        .toList();
+    return NoteGroupModel(
+      subjectName: json['subjectName'] ?? '',
+      courseId: json['courseId'] is Map
+          ? (json['courseId'] as Map)['_id'] ?? ''
+          : json['courseId']?.toString() ?? '',
+      notes: notes,
+    );
+  }
+}
+
+class NotesResponse {
+  final int currentTerm;
+  final int requestedTerm;
+  final List<int> availableTerms;
+  final List<NoteGroupModel> groups;
+
+  NotesResponse({
+    required this.currentTerm,
+    required this.requestedTerm,
+    required this.availableTerms,
+    required this.groups,
+  });
+
+  factory NotesResponse.fromJson(Map<String, dynamic> json) {
+    return NotesResponse(
+      currentTerm: json['currentTerm'] ?? 1,
+      requestedTerm: json['requestedTerm'] ?? 1,
+      availableTerms: (json['availableTerms'] as List? ?? [])
+          .map((t) => t as int)
+          .toList(),
+      groups: (json['groups'] as List? ?? [])
+          .map((g) => NoteGroupModel.fromJson(g))
+          .toList(),
     );
   }
 }

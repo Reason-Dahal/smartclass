@@ -104,14 +104,15 @@ class StudentService {
 
   // ─── NOTES ───────────────────────────────────────────────────────
 
-  Future<List<NoteModel>> getMyNotes({String? courseId}) async {
+  Future<NotesResponse> getMyNotes({int? term}) async {
     try {
       final response = await _dio.get(
         ApiConstants.studentNotes,
-        queryParameters: courseId != null ? {'courseId': courseId} : null,
+        queryParameters: term != null ? {'term': term} : null,
       );
-      final notes = response.data['data']['notes'] as List;
-      return notes.map((e) => NoteModel.fromJson(e)).toList();
+      return NotesResponse.fromJson(
+        response.data['data'] as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(

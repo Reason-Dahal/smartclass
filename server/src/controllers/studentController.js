@@ -284,23 +284,89 @@ const getMyNotes = async (req, res) => {
       });
     }
 
-    const { courseId } = req.query;
-    const enrollmentFilter = { studentId: student._id, isActive: true };
-    if (courseId) enrollmentFilter.courseId = courseId;
+    // V2 — get current term from student's batch
+    const batch = await Batch.findById(student.batchId);
+    const currentTerm = batch ? batch.currentTerm : 1;
 
-    const enrollments = await Enrollment.find(enrollmentFilter).select('courseId');
+    // Term from query or default to current term
+    const requestedTerm = req.query.term
+      ? parseInt(req.query.term)
+      : currentTerm;
+
+    // Get all enrolled courses
+    const enrollments = await Enrollment.find({
+      studentId: student._id,
+      isActive:  true,
+    }).select('courseId');
+
     const courseIds = enrollments.map((e) => e.courseId);
 
+    // Filter courses by requested term
+    const termCourses = await Course.find({
+      _id:      { $in: courseIds },
+      term:     requestedTerm,
+      isActive: true,
+    }).select('_id subjectName term');
+
+    const termCourseIds = termCourses.map((c) => c._id);
+
     const notes = await Note.find({
-      courseId: { $in: courseIds },
+      courseId: { $in: termCourseIds },
       isActive: true,
     })
       .populate('courseId', 'subjectName term')
       .sort({ createdAt: -1 });
 
+    // V2 — group by subject
+    const grouped = [];
+    const subjectMap = {};
+
+    termCourses.forEach((course) => {
+      const key = course._id.toString();
+      if (!subjectMap[key]) {
+        subjectMap[key] = {
+          subjectName: course.subjectName,
+          courseId:    course._id,
+          notes:       [],
+        };
+        grouped.push(subjectMap[key]);
+      }
+    });
+
+    notes.forEach((note) => {
+      const courseId = note.courseId._id
+        ? note.courseId._id.toString()
+        : note.courseId.toString();
+
+      if (subjectMap[courseId]) {
+        // Detect file type from URL
+        const url      = note.fileUrl || '';
+        const fileType = url.toLowerCase().includes('.pdf') ? 'pdf' : 'docx';
+
+        subjectMap[courseId].notes.push({
+          _id:        note._id,
+          title:      note.title,
+          fileUrl:    note.fileUrl,
+          fileType,
+          createdAt:  note.createdAt,
+        });
+      }
+    });
+
+    // Get all available terms for the switcher
+    const allCourses = await Course.find({
+      _id:      { $in: courseIds },
+      isActive: true,
+    }).select('term').distinct('term');
+
     res.status(200).json({
       success: true,
-      data: { notes },
+      data: {
+        currentTerm,
+        requestedTerm,
+        availableTerms: allCourses.sort((a, b) => a - b),
+        groups: grouped,
+      },
     });
   } catch (error) {
     res.status(500).json({
