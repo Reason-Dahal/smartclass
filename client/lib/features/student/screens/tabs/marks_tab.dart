@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../providers/student_providers.dart';
 import '../../widgets/empty_state.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:client/shared/widgets/loading_widget.dart';
 import 'package:client/shared/widgets/error_widget.dart';
 
@@ -408,25 +409,11 @@ class _FinalResultsView extends ConsumerWidget {
     String fileName,
   ) async {
     try {
-      const downloadsPath = '/storage/emulated/0/Download';
-      final savePath = '$downloadsPath/$fileName';
-      await Future.delayed(const Duration(milliseconds: 100)); // brief pause
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Downloading...')));
-      }
-      // Download using Dio
-      final dio = DioClient.instance;
-      await dio.download(fileUrl, savePath);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Saved to Downloads: $fileName'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+      final uri = Uri.parse(fileUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw Exception('Could not open file');
       }
     } catch (e) {
       if (context.mounted) {
