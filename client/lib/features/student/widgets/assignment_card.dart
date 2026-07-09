@@ -31,11 +31,11 @@ class _AssignmentCardState extends ConsumerState<AssignmentCard> {
     setState(() => _isUploading = true);
 
     try {
-      final fileUrl = await uploadService.pickAndUploadFile(
+      final result = await uploadService.pickAndUploadFile(
         ApiConstants.uploadSubmission,
       );
 
-      if (fileUrl == null) {
+      if (result == null) {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -46,10 +46,11 @@ class _AssignmentCardState extends ConsumerState<AssignmentCard> {
 
       await studentService.submitAssignment(
         widget.assignment.id,
-        fileUrl: fileUrl,
+        fileUrl: result['fileUrl'],
+        fileType: result['fileType'],
       );
 
-      ref.invalidate(studentAssignmentsProvider);
+      ref.invalidate(studentAssignmentsGroupedProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

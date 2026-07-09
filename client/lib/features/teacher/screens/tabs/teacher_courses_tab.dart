@@ -468,11 +468,11 @@ class TeacherCoursesTab extends ConsumerWidget {
                           setState(() => isUploading = true);
                           try {
                             final uploadService = UploadService();
-                            final url = await uploadService.pickAndUploadFile(
-                              ApiConstants.uploadNote,
-                            );
+                            final result = await uploadService
+                                .pickAndUploadFile(ApiConstants.uploadNote);
                             setState(() {
-                              selectedFileUrl = url;
+                              selectedFileUrl =
+                                  result?['fileUrl']; // ← extract URL
                               isUploading = false;
                             });
                           } catch (e) {
@@ -540,17 +540,25 @@ class TeacherCoursesTab extends ConsumerWidget {
               onPressed: selectedFileUrl == null || titleController.text.isEmpty
                   ? null
                   : () async {
-                      final service = ref.read(teacherServiceProvider);
-                      await service.uploadNote(
-                        course.id,
-                        title: titleController.text,
-                        fileUrl: selectedFileUrl!,
-                      );
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Note uploaded')),
+                      try {
+                        final service = ref.read(teacherServiceProvider);
+                        await service.uploadNote(
+                          course.id,
+                          title: titleController.text,
+                          fileUrl: selectedFileUrl!,
                         );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Note uploaded')),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
                       }
                     },
               child: const Text('Upload'),

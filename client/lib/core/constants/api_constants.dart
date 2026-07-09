@@ -51,6 +51,7 @@ class ApiConstants {
   static const String studentCourses = '/courses/student/my-courses';
   static const String studentElectives = '/courses/student/electives';
   static const String studentEnroll = '/courses/student/enroll';
+  static const String studentSubmissions = '/student/submissions';
 
   // Admin — Academic
   static const String finalResults = '/admin/final-results';

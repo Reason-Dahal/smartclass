@@ -9,6 +9,7 @@ const EvaluationConfig = require('../models/EvaluationConfig');
 const Notification = require('../models/Notification');
 const Enrollment = require('../models/Enrollment');
 const Course = require('../models/Course');
+const Batch = require('../models/Batch');
 
 // ─── HELPER: get student profile from logged-in user ─────────────
 const getStudentProfile = async (userId) => {
@@ -85,41 +86,91 @@ const getMyAssignments = async (req, res) => {
       });
     }
 
-    const { courseId } = req.query;
+    // V2 — get current term from student's batch
+    const batch = await Batch.findById(student.batchId);
+    const currentTerm = batch ? batch.currentTerm : 1;
 
-    // Get all courses the student is enrolled in
-    const enrollmentFilter = { studentId: student._id, isActive: true };
-    if (courseId) enrollmentFilter.courseId = courseId;
+    // Get enrolled courses for current term only
+    const enrollments = await Enrollment.find({
+      studentId: student._id,
+      isActive: true,
+    }).select('courseId');
 
-    const enrollments = await Enrollment.find(enrollmentFilter).select('courseId');
     const courseIds = enrollments.map((e) => e.courseId);
 
+    // Filter courses to current term only
+    const currentTermCourses = await Course.find({
+      _id: { $in: courseIds },
+      term: currentTerm,
+      isActive: true,
+    }).select('_id subjectName term');
+
+    const currentTermCourseIds = currentTermCourses.map((c) => c._id);
+
     const assignments = await Assignment.find({
-      courseId: { $in: courseIds },
+      courseId: { $in: currentTermCourseIds },
       isActive: true,
     })
       .populate('courseId', 'subjectName term')
       .sort({ dueDate: 1 });
 
-    // Check submission status for each assignment
+    // Check submission status — V2: exclude soft-deleted submissions
     const assignmentsWithStatus = await Promise.all(
       assignments.map(async (assignment) => {
         const submission = await Submission.findOne({
           assignmentId: assignment._id,
-          studentId: student._id,
+          studentId:    student._id,
+          isDeleted:    false,   // V2 — exclude deleted submissions
         });
+
         return {
           ...assignment.toObject(),
-          submission: submission || null,
+          submission: submission ? {
+            _id:         submission._id,
+            fileUrl:     submission.fileUrl,     // V2 — for preview
+            fileType:    submission.fileType,    // V2 — pdf or docx
+            status:      submission.status,
+            grade:       submission.grade,
+            feedback:    submission.feedback,
+            submittedAt: submission.submittedAt,
+            isGraded:    submission.grade !== null && submission.grade !== undefined,
+          } : null,
           isSubmitted: !!submission,
-          isPastDue: new Date() > new Date(assignment.dueDate),
+          isPastDue:   new Date() > new Date(assignment.dueDate),
         };
       })
     );
 
+    // V2 — group by subject
+    const grouped = [];
+    const subjectMap = {};
+
+    currentTermCourses.forEach((course) => {
+      if (!subjectMap[course._id.toString()]) {
+        subjectMap[course._id.toString()] = {
+          subjectName: course.subjectName,
+          courseId:    course._id,
+          assignments: [],
+        };
+        grouped.push(subjectMap[course._id.toString()]);
+      }
+    });
+
+    assignmentsWithStatus.forEach((assignment) => {
+      const courseId = assignment.courseId._id
+        ? assignment.courseId._id.toString()
+        : assignment.courseId.toString();
+      if (subjectMap[courseId]) {
+        subjectMap[courseId].assignments.push(assignment);
+      }
+    });
+
     res.status(200).json({
       success: true,
-      data: { assignments: assignmentsWithStatus },
+      data: {
+        term:   currentTerm,
+        groups: grouped,
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -132,7 +183,7 @@ const getMyAssignments = async (req, res) => {
 const submitAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fileUrl } = req.body;
+    const { fileUrl, fileType } = req.body;  // ← add fileType
 
     const student = await getStudentProfile(req.user._id);
     if (!student) {
@@ -150,13 +201,12 @@ const submitAssignment = async (req, res) => {
       });
     }
 
-    // Verify student is enrolled in this course
+    // Verify student is enrolled
     const enrollment = await Enrollment.findOne({
       studentId: student._id,
-      courseId: assignment.courseId,
-      isActive: true,
+      courseId:  assignment.courseId,
+      isActive:  true,
     });
-
     if (!enrollment) {
       return res.status(403).json({
         success: false,
@@ -164,25 +214,53 @@ const submitAssignment = async (req, res) => {
       });
     }
 
-    // Determine on-time or late
-    const status = new Date() > new Date(assignment.dueDate) ? 'late' : 'on-time';
+    // Check due date for resubmission after delete
+    const isPastDue = new Date() > new Date(assignment.dueDate);
+    if (isPastDue) {
+      // Check if there is a non-deleted submission already
+      const existing = await Submission.findOne({
+        assignmentId: id,
+        studentId:    student._id,
+        isDeleted:    false,
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'ALREADY_SUBMITTED',
+            message: 'Assignment already submitted',
+          },
+        });
+      }
+    }
+
+    const status = isPastDue ? 'late' : 'on-time';
+
+    // Determine file type from URL if not provided
+    const resolvedFileType = fileType ||
+      (fileUrl?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx');
 
     const submission = await Submission.findOneAndUpdate(
       { assignmentId: id, studentId: student._id },
       {
         assignmentId: id,
-        studentId: student._id,
-        fileUrl: fileUrl || null,
-        submittedAt: new Date(),
+        studentId:    student._id,
+        fileUrl:      fileUrl || null,
+        fileType:     resolvedFileType,   //add
+        submittedAt:  new Date(),
         status,
+        isDeleted:    false,              //reset soft delete on resubmit
+        deletedAt:    null,               //clear deleted date
+        grade:        null,               //clear old grade on resubmit
+        feedback:     null,               //clear old feedback on resubmit
       },
-      { upsert: true, new: true, runValidators: true }
+      { upsert: true, new: true, runValidators: false }
     );
 
     res.status(200).json({
       success: true,
       data: {
-        message: `Assignment submitted successfully — marked as ${status}`,
+        message: `Assignment submitted — marked as ${status}`,
         submission,
       },
     });
@@ -435,6 +513,63 @@ const getEvaluationIndicator = async (req, res) => {
   }
 };
 
+// ─── DELET SUBMISSION ────────────────────────────────────────────────
+
+const deleteSubmission = async (req, res) => {
+  try {
+    const student = await getStudentProfile(req.user._id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Student profile not found' },
+      });
+    }
+
+    const submission = await Submission.findById(req.params.id);
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Submission not found' },
+      });
+    }
+
+    // Ownership check
+    if (!submission.studentId.equals(student._id)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Not your submission' },
+      });
+    }
+
+    // Cannot delete if already graded
+    if (submission.grade !== null && submission.grade !== undefined) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'ALREADY_GRADED',
+          message: 'Cannot delete a graded submission',
+        },
+      });
+    }
+
+    // Soft delete
+    submission.isDeleted = true;
+    submission.deletedAt = new Date();
+    await submission.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Submission deleted successfully' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+
 // ─── NOTIFICATIONS ────────────────────────────────────────────────
 
 const getMyNotifications = async (req, res) => {
@@ -502,6 +637,7 @@ module.exports = {
   getMyAttendance,
   getMyAssignments,
   submitAssignment,
+  deleteSubmission,
   getMyNotes,
   getMyMarksheets,
   getMyFinalResults,

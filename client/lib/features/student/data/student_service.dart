@@ -49,12 +49,48 @@ class StudentService {
     }
   }
 
-  Future<void> submitAssignment(String assignmentId, {String? fileUrl}) async {
+  Future<void> submitAssignment(
+    String assignmentId, {
+    String? fileUrl,
+    String? fileType,
+  }) async {
     try {
       await _dio.post(
         '${ApiConstants.studentAssignments}/$assignmentId/submit',
-        data: {'fileUrl': fileUrl},
+        data: {'fileUrl': fileUrl, 'fileType': fileType},
       );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  // V2 — returns grouped assignments by subject for current term
+  Future<List<AssignmentGroupModel>> getMyAssignmentsGrouped() async {
+    try {
+      final response = await _dio.get(ApiConstants.studentAssignments);
+      final groups = response.data['data']['groups'] as List? ?? [];
+      return groups.map((g) => AssignmentGroupModel.fromJson(g)).toList();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  // V2 — soft delete a submission
+  Future<void> deleteSubmission(String submissionId) async {
+    try {
+      await _dio.delete('${ApiConstants.studentSubmissions}/$submissionId');
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(

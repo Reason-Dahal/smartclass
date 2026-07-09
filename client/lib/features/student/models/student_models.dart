@@ -79,6 +79,9 @@ class SubmissionModel {
   final double? grade;
   final String? feedback;
   final DateTime submittedAt;
+  final String? fileUrl; // V2 — for in-app preview
+  final String? fileType; // V2 — 'pdf' or 'docx'
+  final bool isGraded; // V2 — true when grade is not null
 
   SubmissionModel({
     required this.id,
@@ -86,18 +89,25 @@ class SubmissionModel {
     this.grade,
     this.feedback,
     required this.submittedAt,
+    this.fileUrl,
+    this.fileType,
+    required this.isGraded,
   });
 
   factory SubmissionModel.fromJson(Map<String, dynamic> json) {
+    final grade = json['grade'] != null
+        ? double.tryParse(json['grade'].toString())
+        : null;
     return SubmissionModel(
       id: json['_id'] ?? '',
       status: json['status'] ?? '',
-      grade: json['grade'] != null
-          ? double.tryParse(json['grade'].toString())
-          : null,
+      grade: grade,
       feedback: json['feedback'],
       submittedAt:
           DateTime.tryParse(json['submittedAt'] ?? '') ?? DateTime.now(),
+      fileUrl: json['fileUrl'],
+      fileType: json['fileType'],
+      isGraded: grade != null,
     );
   }
 }
@@ -229,6 +239,31 @@ class CourseModel {
       enrollmentId: json['enrollmentId'] ?? '',
       enrollmentType: json['enrollmentType'] ?? '',
       course: json['course'] as Map<String, dynamic>? ?? {},
+    );
+  }
+}
+
+class AssignmentGroupModel {
+  final String subjectName;
+  final String courseId;
+  final List<AssignmentModel> assignments;
+
+  AssignmentGroupModel({
+    required this.subjectName,
+    required this.courseId,
+    required this.assignments,
+  });
+
+  factory AssignmentGroupModel.fromJson(Map<String, dynamic> json) {
+    final assignments = (json['assignments'] as List? ?? [])
+        .map((a) => AssignmentModel.fromJson(a))
+        .toList();
+    return AssignmentGroupModel(
+      subjectName: json['subjectName'] ?? '',
+      courseId: json['courseId'] is Map
+          ? json['courseId']['_id'] ?? ''
+          : json['courseId'] ?? '',
+      assignments: assignments,
     );
   }
 }

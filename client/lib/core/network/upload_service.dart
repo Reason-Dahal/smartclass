@@ -7,11 +7,11 @@ import '../constants/api_constants.dart';
 class UploadService {
   final Dio _dio = DioClient.instance;
 
-  Future<String?> pickAndUploadFile(String uploadEndpoint) async {
-    // 1. Open file picker
+  // Return both fileUrl and fileType
+  Future<Map<String, String>?> pickAndUploadFile(String uploadEndpoint) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'png', 'jpg', 'txt', 'ppt'],
+      allowedExtensions: ['pdf', 'doc', 'docx', 'png', 'jpg', 'txt'],
     );
 
     if (result == null || result.files.isEmpty) return null;
@@ -19,7 +19,10 @@ class UploadService {
     final file = result.files.first;
     if (file.path == null) return null;
 
-    // 2. Upload to backend
+    // Determine file type
+    final fileName = file.name.toLowerCase();
+    final fileType = fileName.endsWith('.pdf') ? 'pdf' : 'docx';
+
     try {
       final formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(file.path!, filename: file.name),
@@ -31,7 +34,8 @@ class UploadService {
         options: Options(contentType: 'multipart/form-data'),
       );
 
-      return response.data['data']['fileUrl'] as String;
+      final fileUrl = response.data['data']['fileUrl'] as String;
+      return {'fileUrl': fileUrl, 'fileType': fileType};
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(

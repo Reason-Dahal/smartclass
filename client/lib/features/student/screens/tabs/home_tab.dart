@@ -16,13 +16,13 @@ class HomeTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final attendance = ref.watch(studentAttendanceProvider);
-    final assignments = ref.watch(studentAssignmentsProvider);
+    final assignmentsAsync = ref.watch(studentAssignmentsGroupedProvider);
     final notifications = ref.watch(studentNotificationsProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(studentAttendanceProvider);
-        ref.invalidate(studentAssignmentsProvider);
+        ref.invalidate(studentAssignmentsGroupedProvider);
         ref.invalidate(studentNotificationsProvider);
       },
       child: SingleChildScrollView(
@@ -31,7 +31,7 @@ class HomeTab extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Welcome back',
               style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
@@ -80,9 +80,16 @@ class HomeTab extends ConsumerWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: assignments.when(
-                    data: (list) {
-                      final pending = list.where((a) => !a.isSubmitted).length;
+                  child: // Summary card — pending count
+                  assignmentsAsync.when(
+                    data: (groups) {
+                      // Flatten all assignments from all groups
+                      final allAssignments = groups
+                          .expand((g) => g.assignments)
+                          .toList();
+                      final pending = allAssignments
+                          .where((a) => !a.isSubmitted)
+                          .length;
                       return SummaryCard(
                         label: 'Pending',
                         value: '$pending',
@@ -120,9 +127,13 @@ class HomeTab extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 8),
-            assignments.when(
-              data: (list) {
-                final upcoming = list
+            // Upcoming assignments section
+            assignmentsAsync.when(
+              data: (groups) {
+                final allAssignments = groups
+                    .expand((g) => g.assignments)
+                    .toList();
+                final upcoming = allAssignments
                     .where((a) => !a.isSubmitted && !a.isPastDue)
                     .take(3)
                     .toList();

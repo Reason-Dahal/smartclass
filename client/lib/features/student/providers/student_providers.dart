@@ -16,6 +16,11 @@ final studentAssignmentsProvider = FutureProvider<List<AssignmentModel>>((
   return ref.read(studentServiceProvider).getMyAssignments();
 });
 
+final studentAssignmentsGroupedProvider =
+    FutureProvider<List<AssignmentGroupModel>>((ref) async {
+      return ref.read(studentServiceProvider).getMyAssignmentsGrouped();
+    });
+
 final studentNotesProvider = FutureProvider<List<NoteModel>>((ref) async {
   return ref.read(studentServiceProvider).getMyNotes();
 });

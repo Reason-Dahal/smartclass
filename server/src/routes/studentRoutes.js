@@ -5,6 +5,7 @@ const {
   getMyAttendance,
   getMyAssignments,
   submitAssignment,
+  deleteSubmission, 
   getMyNotes,
   getMyMarksheets,
   getMyFinalResults,
@@ -23,6 +24,7 @@ router.get('/attendance', getMyAttendance);
 // Assignments
 router.get('/assignments', getMyAssignments);
 router.post('/assignments/:id/submit', submitAssignment);
+router.delete('/submissions/:id',    deleteSubmission);
 
 // Notes
 router.get('/notes', getMyNotes);
