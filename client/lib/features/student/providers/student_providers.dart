@@ -26,6 +26,22 @@ final studentMarksheetsProvider = FutureProvider<List<MarksheetModel>>((
   return ref.read(studentServiceProvider).getMyMarksheets();
 });
 
+// Final results — list of published result files for student's program
+final studentFinalResultsProvider = FutureProvider<List<FinalResultModel>>((
+  ref,
+) async {
+  return ref.read(studentServiceProvider).getMyFinalResults();
+});
+
+// Marksheets by term — parameterised
+final studentMarksheetsByTermProvider =
+    FutureProvider.family<List<MarksheetModel>, int>((ref, term) async {
+      return ref.read(studentServiceProvider).getMyMarksheets(term: term);
+    });
+
+// Selected term state for marks tab
+final selectedMarksTermProvider = StateProvider<int>((ref) => 1);
+
 final studentCoursesProvider = FutureProvider<List<CourseModel>>((ref) async {
   return ref.read(studentServiceProvider).getMyCourses();
 });

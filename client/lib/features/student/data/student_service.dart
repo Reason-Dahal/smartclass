@@ -147,10 +147,11 @@ class StudentService {
   }
 
   // ─── Final Result ─────────────────────────────────────────────────────
-  Future<Map<String, dynamic>> getMyFinalResults() async {
+  Future<List<FinalResultModel>> getMyFinalResults() async {
     try {
       final response = await _dio.get(ApiConstants.studentFinalResults);
-      return response.data['data'] as Map<String, dynamic>;
+      final results = response.data['data']['results'] as List;
+      return results.map((e) => FinalResultModel.fromJson(e)).toList();
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(

@@ -7,6 +7,7 @@ import '../../widgets/stat_badge.dart';
 import '../../widgets/report_card.dart';
 import 'package:client/shared/widgets/loading_widget.dart';
 import 'package:client/shared/widgets/error_widget.dart';
+import 'package:file_picker/file_picker.dart';
 
 class AdminHomeSection extends ConsumerWidget {
   final String userName;
@@ -187,6 +188,7 @@ class AdminHomeSection extends ConsumerWidget {
   void _showUploadFinalResults(BuildContext context, WidgetRef ref) async {
     final service = ref.read(adminServiceProvider);
 
+    // Fetch programs first
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -194,149 +196,139 @@ class AdminHomeSection extends ConsumerWidget {
     );
 
     try {
-      final studentsAsync = await ref.read(adminStudentsProvider.future);
+      final programs = await service.getPrograms();
       if (context.mounted) Navigator.pop(context);
 
-      if (studentsAsync.isEmpty) {
+      if (programs.isEmpty) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('No students found')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No programs found. Create a program first.'),
+            ),
+          );
         }
         return;
       }
 
-      String? selectedStudentId;
-      String selectedStatus = 'pass';
+      String? selectedProgramId;
+      String? selectedFileName;
+      List<int>? selectedFileBytes;
+      String? selectedFileType;
       final termController = TextEditingController(text: '1');
-      final dateController = TextEditingController(
-        text: DateTime.now().toIso8601String().split('T')[0],
-      );
-      final courseIdController = TextEditingController();
-      String courseStatus = 'pass';
+      bool isUploading = false;
 
       if (context.mounted) {
         showDialog(
           context: context,
           builder: (ctx) => StatefulBuilder(
             builder: (ctx, setState) => AlertDialog(
-              title: const Text('Upload Final Result'),
-              content: SizedBox(
-                width: double.maxFinite,
-                height: 400,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Dean\'s Office published result',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
+              title: const Text('Publish Final Results'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Upload the Dean's Office result file (PDF or DOCX) "
+                      "for a program and term. All students in the program "
+                      "will see this file.",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
                       ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(
-                          labelText: 'Select Student',
-                          isDense: true,
-                        ),
-                        value: selectedStudentId,
-                        isExpanded: true,
-                        items: studentsAsync
-                            .map(
-                              (s) => DropdownMenuItem(
-                                value: s.profileId,
-                                child: Text(
-                                  s.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Program dropdown
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Program',
+                        isDense: true,
+                      ),
+                      isExpanded: true,
+                      value: selectedProgramId,
+                      items: programs
+                          .map(
+                            (p) => DropdownMenuItem(
+                              value: p.id,
+                              child: Text(
+                                '${p.name} (${p.type})',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13),
                               ),
-                            )
-                            .toList(),
-                        onChanged: (val) =>
-                            setState(() => selectedStudentId = val),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) =>
+                          setState(() => selectedProgramId = val),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Term
+                    TextField(
+                      controller: termController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Term / Year Number',
+                        isDense: true,
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: termController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Term',
-                          isDense: true,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // File picker
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.attach_file),
+                      label: Text(
+                        selectedFileName ?? 'Select Result File (PDF or DOCX)',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      onPressed: () async {
+                        final result = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: ['pdf', 'docx', 'doc'],
+                          withData: true,
+                        );
+                        if (result != null && result.files.isNotEmpty) {
+                          final file = result.files.first;
+                          final mime = file.name.endsWith('.pdf')
+                              ? 'pdf'
+                              : 'docx';
+                          setState(() {
+                            selectedFileName = file.name;
+                            selectedFileBytes = file.bytes;
+                            selectedFileType = mime;
+                          });
+                        }
+                      },
+                    ),
+
+                    // Show selected file name
+                    if (selectedFileName != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle,
+                              color: AppColors.success,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                selectedFileName!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.success,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: dateController,
-                        decoration: const InputDecoration(
-                          labelText: 'Published Date (YYYY-MM-DD)',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Overall Status',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          Radio<String>(
-                            value: 'pass',
-                            groupValue: selectedStatus,
-                            onChanged: (val) =>
-                                setState(() => selectedStatus = val!),
-                            activeColor: AppColors.success,
-                          ),
-                          const Text('Pass'),
-                          const SizedBox(width: 16),
-                          Radio<String>(
-                            value: 'fail',
-                            groupValue: selectedStatus,
-                            onChanged: (val) =>
-                                setState(() => selectedStatus = val!),
-                            activeColor: AppColors.danger,
-                          ),
-                          const Text('Fail'),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: courseIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'Course ID (optional)',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Radio<String>(
-                            value: 'pass',
-                            groupValue: courseStatus,
-                            onChanged: (val) =>
-                                setState(() => courseStatus = val!),
-                            activeColor: AppColors.success,
-                          ),
-                          const Text('Pass'),
-                          const SizedBox(width: 16),
-                          Radio<String>(
-                            value: 'fail',
-                            groupValue: courseStatus,
-                            onChanged: (val) =>
-                                setState(() => courseStatus = val!),
-                            activeColor: AppColors.danger,
-                          ),
-                          const Text('Fail'),
-                        ],
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
               actions: [
@@ -345,34 +337,34 @@ class AdminHomeSection extends ConsumerWidget {
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: selectedStudentId == null
+                  onPressed:
+                      selectedProgramId == null ||
+                          selectedFileBytes == null ||
+                          isUploading
                       ? null
                       : () async {
+                          setState(() => isUploading = true);
                           try {
                             await service.uploadFinalResults(
-                              studentId: selectedStudentId!,
+                              programId: selectedProgramId!,
                               term: int.tryParse(termController.text) ?? 1,
-                              overallStatus: selectedStatus,
-                              publishedDate: dateController.text,
-                              courseResults: courseIdController.text.isEmpty
-                                  ? []
-                                  : [
-                                      {
-                                        'courseId': courseIdController.text,
-                                        'status': courseStatus,
-                                      },
-                                    ],
+                              fileBytes: selectedFileBytes!,
+                              fileName: selectedFileName!,
+                              fileType: selectedFileType!,
                             );
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Final result uploaded'),
+                                  content: Text(
+                                    'Result published successfully',
+                                  ),
                                   backgroundColor: AppColors.success,
                                 ),
                               );
                             }
                           } catch (e) {
+                            setState(() => isUploading = false);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text(e.toString())),
@@ -380,7 +372,13 @@ class AdminHomeSection extends ConsumerWidget {
                             }
                           }
                         },
-                  child: const Text('Upload'),
+                  child: isUploading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Publish'),
                 ),
               ],
             ),

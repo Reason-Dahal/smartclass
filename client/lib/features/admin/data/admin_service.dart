@@ -447,26 +447,32 @@ class AdminService {
 
   //Final Year Report
   Future<void> uploadFinalResults({
-    required String studentId,
+    required String programId,
     required int term,
-    required String overallStatus,
-    required String publishedDate,
-    required List<Map<String, dynamic>> courseResults,
+    required List<int> fileBytes,
+    required String fileName,
+    required String fileType,
   }) async {
     try {
+      final formData = FormData.fromMap({
+        'programId': programId,
+        'term': term.toString(),
+        'file': MultipartFile.fromBytes(
+          fileBytes,
+          filename: fileName,
+          contentType: DioMediaType(
+            fileType == 'pdf' ? 'application' : 'application',
+            fileType == 'pdf'
+                ? 'pdf'
+                : 'vnd.openxmlformats-officedocument.wordprocessingml.document',
+          ),
+        ),
+      });
+
       await _dio.post(
         ApiConstants.finalResults,
-        data: {
-          'results': [
-            {
-              'studentId': studentId,
-              'term': term,
-              'overallStatus': overallStatus,
-              'publishedDate': publishedDate,
-              'courseResults': courseResults,
-            },
-          ],
-        },
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
       );
     } on DioException catch (e) {
       if (e.response != null) {

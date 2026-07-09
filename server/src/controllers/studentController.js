@@ -277,41 +277,15 @@ const getMyFinalResults = async (req, res) => {
       });
     }
 
-    const results = await FinalResult.find({ studentId: student._id })
-      .populate('courseResults.courseId', 'subjectName term')
-      .sort({ term: -1 });
-
-    // Extract backlog courses — failed with no later pass
-    const backlog = [];
-    const passedCourseIds = new Set();
-
-    // First pass — collect all passed courses
-    results.forEach((result) => {
-      result.courseResults.forEach((cr) => {
-        if (cr.status === 'pass') {
-          passedCourseIds.add(cr.courseId._id.toString());
-        }
-      });
-    });
-
-    // Second pass — find failed courses not later passed
-    results.forEach((result) => {
-      result.courseResults.forEach((cr) => {
-        if (
-          cr.status === 'fail' &&
-          !passedCourseIds.has(cr.courseId._id.toString())
-        ) {
-          backlog.push({
-            course: cr.courseId,
-            term: result.term,
-          });
-        }
-      });
-    });
+    // V2 — return result files for the student's program
+    // All students in the same program see the same merit list file
+    const results = await FinalResult.find({ programId: student.programId })
+      .populate('programId', 'name type')
+      .sort({ term: -1 });  // newest term first
 
     res.status(200).json({
       success: true,
-      data: { results, backlog },
+      data: { results },
     });
   } catch (error) {
     res.status(500).json({
@@ -320,7 +294,6 @@ const getMyFinalResults = async (req, res) => {
     });
   }
 };
-
 // ─── EVALUATION INDICATOR ─────────────────────────────────────────
 
 const getEvaluationIndicator = async (req, res) => {

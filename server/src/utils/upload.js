@@ -40,4 +40,22 @@ const uploadToCloudinary = (buffer, folder) => {
   });
 };
 
-module.exports = { upload, uploadToCloudinary };
+const uploadResultToCloudinary = (buffer, fileType) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'smartclass/results',
+        resource_type: 'raw',
+        type: 'upload',
+        public_id: `result_${Date.now()}.${fileType}`,  // ← add extension to public_id
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result.secure_url);
+      }
+    );
+    stream.end(buffer);
+  });
+};
+
+module.exports = { upload, uploadToCloudinary, uploadResultToCloudinary };

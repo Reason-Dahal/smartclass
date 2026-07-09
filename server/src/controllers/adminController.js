@@ -13,6 +13,8 @@ const FinalResult = require('../models/FinalResult');
 const EvaluationConfig = require('../models/EvaluationConfig');
 const Assignment = require('../models/Assignment');
 const Submission = require('../models/Submission');
+// const { uploadToCloudinary } = require('../utils/upload');
+const { uploadToCloudinary, uploadResultToCloudinary } = require('../utils/upload');
 
 // ─── TEACHER MANAGEMENT ───────────────────────────────────────────
 
@@ -969,43 +971,57 @@ const manualEnroll = async (req, res) => {
 
 const uploadFinalResults = async (req, res) => {
   try {
-    const { results } = req.body;
+    const { programId, term } = req.body;
 
-    // results = [{ studentId, term, overallStatus, publishedDate, courseResults: [{ courseId, status }] }]
-
-    if (!results || !Array.isArray(results) || results.length === 0) {
+    if (!programId || !term) {
       return res.status(400).json({
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'results array is required',
+          message: 'Program and term are required',
         },
       });
     }
 
-    const saved = await Promise.all(
-      results.map(({ studentId, term, overallStatus, publishedDate, courseResults }) =>
-        FinalResult.findOneAndUpdate(
-          { studentId, term },
-          {
-            studentId,
-            term,
-            overallStatus,
-            courseResults,
-            publishedDate: new Date(publishedDate),
-            enteredBy: req.user._id,
-          },
-          { upsert: true, new: true, runValidators: true }
-        )
-      )
+    // Validate program exists
+    const program = await Program.findById(programId);
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Program not found' },
+      });
+    }
+
+    // Validate file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'NO_FILE', message: 'Result file is required' },
+      });
+    }
+
+    // Determine file type
+    const mimetype = req.file.mimetype;
+    const fileType = mimetype.includes('pdf') ? 'pdf' : 'docx';
+
+    // Upload file to Cloudinary
+    const fileUrl = await uploadResultToCloudinary(req.file.buffer, fileType);
+
+    // Upsert — overwrite if result for this program+term already exists
+    await FinalResult.findOneAndUpdate(
+      { programId, term: parseInt(term) },
+      {
+        fileUrl,
+        fileType,
+        publishedDate: new Date(),
+        uploadedBy: req.user._id,
+      },
+      { upsert: true, new: true }
     );
 
     res.status(200).json({
       success: true,
-      data: {
-        message: `Final results uploaded for ${saved.length} students`,
-        results: saved,
-      },
+      data: { message: 'Final result published successfully' },
     });
   } catch (error) {
     res.status(500).json({

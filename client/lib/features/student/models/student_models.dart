@@ -162,6 +162,37 @@ class MarksheetModel {
   }
 }
 
+class FinalResultModel {
+  final String id;
+  final String programName;
+  final int term;
+  final String fileUrl;
+  final String fileType;
+  final DateTime publishedDate;
+
+  FinalResultModel({
+    required this.id,
+    required this.programName,
+    required this.term,
+    required this.fileUrl,
+    required this.fileType,
+    required this.publishedDate,
+  });
+
+  factory FinalResultModel.fromJson(Map<String, dynamic> json) {
+    final program = json['programId'] as Map<String, dynamic>? ?? {};
+    return FinalResultModel(
+      id: json['_id'] ?? '',
+      programName: program['name'] ?? '',
+      term: json['term'] ?? 0,
+      fileUrl: json['fileUrl'] ?? '',
+      fileType: json['fileType'] ?? 'pdf',
+      publishedDate:
+          DateTime.tryParse(json['publishedDate'] ?? '') ?? DateTime.now(),
+    );
+  }
+}
+
 class EvaluationModel {
   final double score;
   final String status;
