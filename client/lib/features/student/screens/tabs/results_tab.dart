@@ -1,4 +1,3 @@
-import 'package:client/core/network/dio_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,11 +7,6 @@ import '../../providers/student_providers.dart';
 import '../../widgets/empty_state.dart';
 import 'package:client/shared/widgets/loading_widget.dart';
 import 'package:client/shared/widgets/error_widget.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
-import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 
 class ResultsTab extends ConsumerWidget {
   const ResultsTab({super.key});

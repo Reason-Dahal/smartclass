@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dio_client.dart';
 import 'api_exception.dart';
-import '../constants/api_constants.dart';
 
 class UploadService {
   final Dio _dio = DioClient.instance;
