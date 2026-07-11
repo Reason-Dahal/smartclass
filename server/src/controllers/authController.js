@@ -1,5 +1,7 @@
 const User = require('../models/User');
 const { generateToken } = require('../utils/jwt.js');
+const sendEmail = require('../utils/email');
+const crypto    = require('crypto');
 
 const login = async (req, res) => {
   try {
@@ -128,4 +130,222 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { login, getMe, changePassword };
+//  FORGOT PASSWORD 
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Email is required' },
+      });
+    }
+
+    const user = await User.findOne({ email }).select('+otpCode +otpExpiry');
+    if (!user) {
+      // Return success even if user not found — security best practice
+      // Prevents email enumeration attacks
+      return res.status(200).json({
+        success: true,
+        data: { message: 'If this email exists, an OTP has been sent' },
+      });
+    }
+
+    if (user.status !== 'active') {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'ACCOUNT_SUSPENDED',
+          message: 'Your account has been suspended. Contact admin.',
+        },
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otp       = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.otpCode   = otp;
+    user.otpExpiry = otpExpiry;
+    await user.save({ validateBeforeSave: false });
+
+    // Send OTP email
+    await sendEmail({
+      to:      user.email,
+      subject: 'SmartClass — Password Reset OTP',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color: #1a73e8;">Password Reset</h2>
+          <p>Hi ${user.name},</p>
+          <p>Your OTP for password reset is:</p>
+          <div style="
+            font-size: 36px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            color: #1a73e8;
+            text-align: center;
+            padding: 20px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            margin: 20px 0;
+          ">${otp}</div>
+          <p>This OTP expires in <strong>10 minutes</strong>.</p>
+          <p>If you did not request this, ignore this email.</p>
+          <hr/>
+          <p style="color: #999; font-size: 12px;">SmartClass — Academic Management System</p>
+        </div>
+      `,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'OTP sent to your email' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// VERIFY OTP 
+const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Email and OTP are required',
+        },
+      });
+    }
+
+    const user = await User.findOne({ email }).select('+otpCode +otpExpiry');
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_OTP', message: 'Invalid OTP' },
+      });
+    }
+
+    // Check OTP matches
+    if (user.otpCode !== otp) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_OTP', message: 'Invalid OTP' },
+      });
+    }
+
+    // Check OTP not expired
+    if (!user.otpExpiry || user.otpExpiry < new Date()) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'OTP_EXPIRED',
+          message: 'OTP has expired. Please request a new one.',
+        },
+      });
+    }
+
+    // Generate a short-lived reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+
+    // Store hashed reset token — expires in 15 minutes
+    user.otpCode   = resetToken; // reuse otpCode field for reset token
+    user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message:    'OTP verified successfully',
+        resetToken, // sent to Flutter to use in next step
+        email,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// RESET PASSWORD 
+const resetPassword = async (req, res) => {
+  try {
+    const { email, resetToken, newPassword } = req.body;
+
+    if (!email || !resetToken || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'email, resetToken and newPassword are required',
+        },
+      });
+    }
+
+    const user = await User.findOne({ email }).select(
+      '+otpCode +otpExpiry +password'
+    );
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_TOKEN', message: 'Invalid reset token' },
+      });
+    }
+
+    // Verify reset token
+    if (user.otpCode !== resetToken) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_TOKEN', message: 'Invalid reset token' },
+      });
+    }
+
+    // Check token not expired
+    if (!user.otpExpiry || user.otpExpiry < new Date()) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'TOKEN_EXPIRED',
+          message: 'Reset token has expired. Please start over.',
+        },
+      });
+    }
+
+    // Set new password and clear OTP fields
+    user.password  = newPassword;
+    user.otpCode   = null;
+    user.otpExpiry = null;
+    user.mustChangePassword = false;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Password reset successfully. You can now log in.' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+module.exports = 
+{ 
+   login,
+   getMe,
+   changePassword,
+   forgotPassword,
+   verifyOtp,
+   resetPassword, 
+};

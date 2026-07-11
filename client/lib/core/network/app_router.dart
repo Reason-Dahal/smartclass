@@ -8,6 +8,9 @@ import '../../features/teacher/screens/teacher_dashboard_screen.dart';
 import '../../features/student/screens/student_dashboard_screen.dart';
 import '../storage/secure_storage.dart';
 import '../../shared/screens/pdf_viewer_screen.dart';
+import '../../features/auth/screens/forgot_password_screen.dart';
+import '../../features/auth/screens/verify_otp_screen.dart';
+import '../../features/auth/screens/reset_password_screen.dart';
 // import '../constants/app_constants.dart';
 
 class AppRouter {
@@ -21,21 +24,31 @@ class AppRouter {
     initialLocation: '/splash',
     redirect: (context, state) async {
       final token = await SecureStorage.getToken();
-      final isLoginPage = state.matchedLocation == login;
+      final location = state.matchedLocation;
 
-      // Not logged in — send to login
-      if (token == null && !isLoginPage) return login;
+      // Public routes — no auth required
+      final publicRoutes = [
+        login,
+        '/forgot-password',
+        '/verify-otp',
+        '/reset-password',
+      ];
 
-      // Already logged in — don't show login page again
-      if (token != null && isLoginPage) {
+      final isPublicRoute = publicRoutes.contains(location);
+
+      // Not logged in — only allow public routes
+      if (token == null && !isPublicRoute) return login;
+
+      // Already logged in — don't show login or public routes
+      if (token != null && isPublicRoute) {
         final userJson = await SecureStorage.getUser();
         if (userJson != null) {
-          // Route based on role
           if (userJson.contains('"role":"admin"')) return adminDashboard;
           if (userJson.contains('"role":"teacher"')) return teacherDashboard;
           return studentDashboard;
         }
       }
+
       return null;
     },
     routes: [
@@ -68,6 +81,25 @@ class AppRouter {
             fileUrl: params['url'] ?? '',
             title: params['title'] ?? 'Document',
             fileType: params['type'] ?? 'pdf',
+          );
+        },
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/verify-otp',
+        builder: (context, state) =>
+            VerifyOtpScreen(email: state.extra as String),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) {
+          final data = state.extra as Map<String, String>;
+          return ResetPasswordScreen(
+            email: data['email'] ?? '',
+            resetToken: data['resetToken'] ?? '',
           );
         },
       ),

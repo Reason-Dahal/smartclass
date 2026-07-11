@@ -47,6 +47,18 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false,  // Never included in standard queries
     },
+
+    
+     otpCode: {
+      type:     String,
+      default:  null,
+      select:   false,
+    },
+    otpExpiry: {
+      type:     Date,
+      default:  null,
+      select:   false,
+    },
   },
   {
     timestamps: true,
