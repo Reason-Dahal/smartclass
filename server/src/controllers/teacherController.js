@@ -166,6 +166,142 @@ const correctAttendance = async (req, res) => {
   }
 };
 
+// ─── EDIT ATTENDANCE ─────────────────────────────────────────────
+const editAttendance = async (req, res) => {
+  try {
+    const { courseId, date } = req.params;
+    const { records } = req.body;
+
+    if (!records || !Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'records array is required' },
+      });
+    }
+
+    const verified = await verifyTeacherCourse(req.user._id, courseId);
+    if (!verified) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found or not your course' },
+      });
+    }
+
+    const attendanceDate = new Date(date);
+
+    // Ownership check — verify teacher created at least one record for this date
+    const existing = await Attendance.findOne({
+      courseId,
+      date: attendanceDate,
+      markedBy: req.user._id,
+    });
+
+    if (!existing) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only edit attendance records you created',
+        },
+      });
+    }
+
+    // Upsert each record — same pattern as takeAttendance
+    const results = await Promise.all(
+      records.map(({ studentId, status }) =>
+        Attendance.findOneAndUpdate(
+          { courseId, studentId, date: attendanceDate },
+          { courseId, studentId, date: attendanceDate, status, markedBy: req.user._id },
+          { upsert: true, new: true, runValidators: true }
+        )
+      )
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message: `Attendance updated for ${results.length} students`,
+        date: attendanceDate,
+        records: results,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── GET ATTENDANCE DATES ────────────────────────────────────────
+// Returns distinct dates the teacher has taken attendance for a course
+const getAttendanceDates = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    const verified = await verifyTeacherCourse(req.user._id, courseId);
+    if (!verified) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found or not your course' },
+      });
+    }
+
+    const dates = await Attendance.distinct('date', {
+      courseId,
+      markedBy: req.user._id,
+    });
+
+    // Sort newest first
+    dates.sort((a, b) => new Date(b) - new Date(a));
+
+    res.status(200).json({
+      success: true,
+      data: { dates },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ─── GET ATTENDANCE FOR A DATE ───────────────────────────────────
+// Returns all student attendance records for a specific date
+const getAttendanceForDate = async (req, res) => {
+  try {
+    const { courseId, date } = req.params;
+
+    const verified = await verifyTeacherCourse(req.user._id, courseId);
+    if (!verified) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found or not your course' },
+      });
+    }
+
+    const attendanceDate = new Date(date);
+    const records = await Attendance.find({
+      courseId,
+      date: attendanceDate,
+    }).populate({
+      path: 'studentId',
+      populate: { path: 'userId', select: 'name' },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { records },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
 // ─── ASSIGNMENTS ──────────────────────────────────────────────────
 
 const createAssignment = async (req, res) => {
@@ -585,6 +721,44 @@ const createAssignment = async (req, res) => {
     }
   };
 
+  // ─── GET MARKSHEETS FOR COURSE/TERM ─────────────────────────────
+// Returns existing marksheets for pre-filling the edit form
+const getMarksheetsByCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { term } = req.query;
+
+    const verified = await verifyTeacherCourse(req.user._id, courseId);
+    if (!verified) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found or not your course' },
+      });
+    }
+
+    const filter = { courseId };
+    if (term) filter.term = parseInt(term);
+
+    const marksheets = await Marksheet.find(filter)
+      .populate({
+        path: 'studentId',
+        populate: { path: 'userId', select: 'name' },
+      });
+
+    res.status(200).json({
+      success: true,
+      data: { marksheets },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+
+
   const getCourseStudents = async (req, res) => {
     try {
       const { courseId } = req.params;
@@ -664,6 +838,9 @@ const createAssignment = async (req, res) => {
     takeAttendance,
     getAttendance,
     correctAttendance,
+    editAttendance,
+    getAttendanceDates,
+    getAttendanceForDate,
     createAssignment,
     updateAssignment,
     getSubmissions,
@@ -674,4 +851,5 @@ const createAssignment = async (req, res) => {
     bulkUploadMarksheets,
     getCourseStudents,
     getCourseAssignments,
+    getMarksheetsByCourse,
   };

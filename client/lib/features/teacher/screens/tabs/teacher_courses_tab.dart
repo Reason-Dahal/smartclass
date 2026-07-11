@@ -1,3 +1,4 @@
+import 'package:client/features/teacher/screens/edit_marksheet_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -166,6 +167,23 @@ class TeacherCoursesTab extends ConsumerWidget {
                 _showTakeAttendance(context, ref, course);
               },
             ),
+            ActionTile(
+              icon: Icons.edit_calendar_outlined,
+              label: 'Edit attendance',
+              onTap: () {
+                Navigator.pop(context);
+                _showEditAttendance(context, ref, course);
+              },
+            ),
+            ActionTile(
+              icon: Icons.edit_note_outlined,
+              label: 'Edit marksheet',
+              onTap: () {
+                Navigator.pop(context);
+                _showEditMarksheet(context, ref, course);
+              },
+            ),
+
             ActionTile(
               icon: Icons.assignment_add,
               label: 'Create assignment',
@@ -654,6 +672,273 @@ class TeacherCoursesTab extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  // ─── EDIT ATTENDANCE ─────────────────────────────────────────────
+  void _showEditAttendance(
+    BuildContext context,
+    WidgetRef ref,
+    TeacherCourseModel course,
+  ) async {
+    final service = ref.read(teacherServiceProvider);
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final dates = await service.getAttendanceDates(course.id);
+      if (context.mounted) Navigator.pop(context);
+
+      if (dates.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No attendance records found')),
+          );
+        }
+        return;
+      }
+
+      DateTime selectedDate = dates.first;
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setState) => AlertDialog(
+              title: Text('Edit Attendance — ${course.subjectName}'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Date picker dropdown
+                    DropdownButtonFormField<DateTime>(
+                      value: selectedDate,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Date',
+                        isDense: true,
+                      ),
+                      items: dates
+                          .map(
+                            (d) => DropdownMenuItem(
+                              value: d,
+                              child: Text(
+                                '${d.day}/${d.month}/${d.year}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => selectedDate = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        _showEditAttendanceForDate(
+                          context,
+                          ref,
+                          course,
+                          selectedDate,
+                        );
+                      },
+                      child: const Text('Load Attendance'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  void _showEditAttendanceForDate(
+    BuildContext context,
+    WidgetRef ref,
+    TeacherCourseModel course,
+    DateTime date,
+  ) async {
+    final service = ref.read(teacherServiceProvider);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final dateStr =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final records = await service.getAttendanceForDate(course.id, dateStr);
+      if (context.mounted) Navigator.pop(context);
+
+      // Build mutable status map
+      final statusMap = <String, String>{};
+      for (final r in records) {
+        final studentId = r['studentId'] is Map
+            ? r['studentId']['_id']?.toString() ?? ''
+            : r['studentId']?.toString() ?? '';
+        statusMap[studentId] = r['status'] ?? 'present';
+      }
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setState) => AlertDialog(
+              title: Text('Edit — ${date.day}/${date.month}/${date.year}'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: ListView.builder(
+                  itemCount: records.length,
+                  itemBuilder: (context, index) {
+                    final r = records[index];
+                    final studentData = r['studentId'] is Map
+                        ? r['studentId'] as Map
+                        : <String, dynamic>{};
+                    final userData = studentData['userId'] is Map
+                        ? studentData['userId'] as Map
+                        : <String, dynamic>{};
+                    final studentId = studentData['_id']?.toString() ?? '';
+                    final name = userData['name'] ?? 'Student ${index + 1}';
+                    final currentStatus = statusMap[studentId] ?? 'present';
+
+                    return ListTile(
+                      title: Text(name, style: const TextStyle(fontSize: 14)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: ['present', 'absent', 'late'].map((s) {
+                          final isSelected = currentStatus == s;
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setState(() => statusMap[studentId] = s),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? _statusColor(s)
+                                      : AppColors.surfaceSecondary,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  s[0].toUpperCase(),
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.textMuted,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    try {
+                      final recordsList = statusMap.entries
+                          .map((e) => {'studentId': e.key, 'status': e.value})
+                          .toList();
+
+                      await service.editAttendance(
+                        courseId: course.id,
+                        date: dateStr,
+                        records: recordsList,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Attendance updated'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(e.toString())));
+                      }
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'present':
+        return AppColors.success;
+      case 'absent':
+        return AppColors.danger;
+      case 'late':
+        return AppColors.warning;
+      default:
+        return AppColors.textMuted;
+    }
+  }
+
+  // ─── EDIT MARKSHEET ───────────────────────────────────────────────
+  void _showEditMarksheet(
+    BuildContext context,
+    WidgetRef ref,
+    TeacherCourseModel course,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => EditMarksheetScreen(course: course)),
     );
   }
 }

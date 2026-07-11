@@ -42,6 +42,29 @@ class TeacherService {
     }
   }
 
+  // ─── GET MARKSHEETS FOR COURSE ───────────────────────────────────
+  Future<List<Map<String, dynamic>>> getMarksheetsByCourse(
+    String courseId, {
+    int? term,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.teacherCoursesBase}/$courseId/marksheets',
+        queryParameters: term != null ? {'term': term} : null,
+      );
+      final marksheets = response.data['data']['marksheets'] as List;
+      return marksheets.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── ATTENDANCE ──────────────────────────────────────────────────
 
   Future<List<AttendanceRecordModel>> getAttendance(
@@ -75,6 +98,71 @@ class TeacherService {
       await _dio.post(
         '/teacher/courses/$courseId/attendance',
         data: {'date': date, 'records': records},
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  // ─── GET ATTENDANCE DATES ────────────────────────────────────────
+  Future<List<DateTime>> getAttendanceDates(String courseId) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.teacherCoursesBase}/$courseId/attendance-dates',
+      );
+      final dates = response.data['data']['dates'] as List;
+      return dates
+          .map((d) => DateTime.tryParse(d.toString()) ?? DateTime.now())
+          .toList();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  // ─── GET ATTENDANCE FOR DATE ─────────────────────────────────────
+  Future<List<Map<String, dynamic>>> getAttendanceForDate(
+    String courseId,
+    String date,
+  ) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.teacherCoursesBase}/$courseId/attendance/$date',
+      );
+      final records = response.data['data']['records'] as List;
+      return records.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  // ─── EDIT ATTENDANCE ─────────────────────────────────────────────
+  Future<void> editAttendance({
+    required String courseId,
+    required String date,
+    required List<Map<String, String>> records,
+  }) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.teacherCoursesBase}/$courseId/attendance/$date',
+        data: {'records': records},
       );
     } on DioException catch (e) {
       if (e.response != null) {

@@ -5,6 +5,9 @@ const {
   takeAttendance,
   getAttendance,
   correctAttendance,
+  editAttendance,           
+  getAttendanceDates,       
+  getAttendanceForDate,
   createAssignment,
   updateAssignment,
   getSubmissions,
@@ -13,6 +16,7 @@ const {
   deleteNote,
   uploadMarksheet,
   bulkUploadMarksheets,
+  getMarksheetsByCourse,
   getCourseStudents,
   getCourseAssignments,
 } = require('../controllers/teacherController');
@@ -25,6 +29,10 @@ router.post('/courses/:courseId/attendance', takeAttendance);
 router.get('/courses/:courseId/attendance', getAttendance);
 router.patch('/attendance/:id', correctAttendance);
 router.get('/courses/:courseId/students', getCourseStudents);
+router.get('/courses/:courseId/attendance-dates', getAttendanceDates);     
+router.get('/courses/:courseId/attendance/:date', getAttendanceForDate);   
+router.patch('/courses/:courseId/attendance/:date', editAttendance);         
+
 
 // Assignments
 router.post('/courses/:courseId/assignments', createAssignment);
@@ -40,5 +48,6 @@ router.delete('/notes/:id', deleteNote);
 // Marksheets
 router.post('/courses/:courseId/marksheets', uploadMarksheet);
 router.post('/courses/:courseId/marksheets/bulk', bulkUploadMarksheets);
+router.get('/courses/:courseId/marksheets', getMarksheetsByCourse);
 
 module.exports = router;
