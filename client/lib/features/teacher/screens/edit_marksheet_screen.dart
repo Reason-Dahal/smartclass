@@ -7,7 +7,13 @@ import '../providers/teacher_providers.dart';
 
 class EditMarksheetScreen extends ConsumerStatefulWidget {
   final TeacherCourseModel course;
-  const EditMarksheetScreen({super.key, required this.course});
+  final String mode; // 'create' or 'edit'
+
+  const EditMarksheetScreen({
+    super.key,
+    required this.course,
+    this.mode = 'edit',
+  });
 
   @override
   ConsumerState<EditMarksheetScreen> createState() =>
@@ -16,36 +22,78 @@ class EditMarksheetScreen extends ConsumerStatefulWidget {
 
 class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
   bool _isLoading = true;
+  bool _isSaving = false;
+  String? _error;
+
+  // For edit mode — existing marksheet records
   List<Map<String, dynamic>> _marksheets = [];
+
+  // For create mode — enrolled students
+  List<Map<String, dynamic>> _students = [];
+
   List<int> _terms = [];
   int _selectedTerm = 1;
-  String? _error;
 
   final Map<String, TextEditingController> _marksControllers = {};
   final Map<String, TextEditingController> _totalControllers = {};
   final Map<String, TextEditingController> _evalControllers = {};
 
+  // Tracks student IDs for create mode
+  final List<String> _studentIds = [];
+  final List<String> _studentNames = [];
+
+  bool get _isCreateMode => widget.mode == 'create';
+
   @override
   void initState() {
     super.initState();
-    _loadMarksheets();
+    _load();
   }
 
-  Future<void> _loadMarksheets() async {
+  Future<void> _load() async {
     try {
       final service = ref.read(teacherServiceProvider);
-      final marksheets = await service.getMarksheetsByCourse(widget.course.id);
-      final terms = marksheets.map((m) => m['term'] as int).toSet().toList()
-        ..sort();
 
-      setState(() {
-        _marksheets = marksheets;
-        _terms = terms.isEmpty ? [1] : terms;
-        _selectedTerm = terms.isEmpty ? 1 : terms.first;
-        _isLoading = false;
-      });
+      if (_isCreateMode) {
+        // Create mode — load enrolled students
+        final students = await service.getCourseStudents(widget.course.id);
+        setState(() {
+          _students = students;
+          _terms = [widget.course.term];
+          _selectedTerm = widget.course.term;
+          _isLoading = false;
+        });
+        _buildControllersFromStudents();
+      } else {
+        // Edit mode — load existing marksheets
+        final marksheets = await service.getMarksheetsByCourse(
+          widget.course.id,
+        );
 
-      _buildControllers();
+        if (marksheets.isEmpty) {
+          // No marksheets yet — switch to create mode automatically
+          final students = await service.getCourseStudents(widget.course.id);
+          setState(() {
+            _students = students;
+            _terms = [widget.course.term];
+            _selectedTerm = widget.course.term;
+            _isLoading = false;
+          });
+          _buildControllersFromStudents();
+          return;
+        }
+
+        final terms = marksheets.map((m) => m['term'] as int).toSet().toList()
+          ..sort();
+
+        setState(() {
+          _marksheets = marksheets;
+          _terms = terms;
+          _selectedTerm = terms.first;
+          _isLoading = false;
+        });
+        _buildControllersFromMarksheets();
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -54,14 +102,34 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
     }
   }
 
-  void _buildControllers() {
-    // Clear old controllers
-    for (final c in _marksControllers.values) c.dispose();
-    for (final c in _totalControllers.values) c.dispose();
-    for (final c in _evalControllers.values) c.dispose();
-    _marksControllers.clear();
-    _totalControllers.clear();
-    _evalControllers.clear();
+  // Build controllers from enrolled students (empty fields)
+  void _buildControllersFromStudents() {
+    _disposeControllers();
+    _studentIds.clear();
+    _studentNames.clear();
+
+    for (final student in _students) {
+      // studentId is nested inside userId population
+      final userId = student['userId'] is Map
+          ? student['userId'] as Map
+          : <String, dynamic>{};
+      final id = student['_id']?.toString() ?? '';
+      final name = userId['name']?.toString() ?? 'Student';
+
+      _studentIds.add(id);
+      _studentNames.add(name);
+      _marksControllers[id] = TextEditingController();
+      _totalControllers[id] = TextEditingController();
+      _evalControllers[id] = TextEditingController();
+    }
+    setState(() {});
+  }
+
+  // Build controllers from existing marksheets (pre-filled)
+  void _buildControllersFromMarksheets() {
+    _disposeControllers();
+    _studentIds.clear();
+    _studentNames.clear();
 
     final termMarksheets = _marksheets
         .where((m) => m['term'] == _selectedTerm)
@@ -69,6 +137,16 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
 
     for (final m in termMarksheets) {
       final id = m['_id']?.toString() ?? '';
+      final studentData = m['studentId'] is Map
+          ? m['studentId'] as Map
+          : <String, dynamic>{};
+      final userData = studentData['userId'] is Map
+          ? studentData['userId'] as Map
+          : <String, dynamic>{};
+
+      _studentIds.add(studentData['_id']?.toString() ?? '');
+      _studentNames.add(userData['name'] ?? 'Student');
+
       _marksControllers[id] = TextEditingController(
         text: m['internalExamMarks']?.toString() ?? '',
       );
@@ -79,47 +157,76 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
         text: m['teacherEvaluationScore']?.toString() ?? '',
       );
     }
+    setState(() {});
+  }
+
+  void _disposeControllers() {
+    for (final c in _marksControllers.values) c.dispose();
+    for (final c in _totalControllers.values) c.dispose();
+    for (final c in _evalControllers.values) c.dispose();
+    _marksControllers.clear();
+    _totalControllers.clear();
+    _evalControllers.clear();
   }
 
   @override
   void dispose() {
-    for (final c in _marksControllers.values) c.dispose();
-    for (final c in _totalControllers.values) c.dispose();
-    for (final c in _evalControllers.values) c.dispose();
+    _disposeControllers();
     super.dispose();
   }
 
   Future<void> _save() async {
+    setState(() => _isSaving = true);
     final service = ref.read(teacherServiceProvider);
-    final termMarksheets = _marksheets
-        .where((m) => m['term'] == _selectedTerm)
-        .toList();
 
     try {
-      for (final m in termMarksheets) {
-        final id = m['_id']?.toString() ?? '';
-        final studentData = m['studentId'] is Map
-            ? m['studentId'] as Map
-            : <String, dynamic>{};
-        final studentId = studentData['_id']?.toString() ?? '';
+      if (_isCreateMode || _marksheets.isEmpty) {
+        // Create mode — use student IDs directly
+        for (int i = 0; i < _studentIds.length; i++) {
+          final studentId = _studentIds[i];
+          await service.uploadMarksheet(
+            widget.course.id,
+            studentId: studentId,
+            term: _selectedTerm,
+            internalExamMarks:
+                double.tryParse(_marksControllers[studentId]?.text ?? '0') ?? 0,
+            internalExamTotalMarks:
+                double.tryParse(_totalControllers[studentId]?.text ?? '0') ?? 0,
+            teacherEvaluationScore:
+                double.tryParse(_evalControllers[studentId]?.text ?? '0') ?? 0,
+          );
+        }
+      } else {
+        // Edit mode — use marksheet IDs
+        final termMarksheets = _marksheets
+            .where((m) => m['term'] == _selectedTerm)
+            .toList();
 
-        await service.uploadMarksheet(
-          widget.course.id,
-          studentId: studentId,
-          term: _selectedTerm,
-          internalExamMarks:
-              double.tryParse(_marksControllers[id]?.text ?? '0') ?? 0,
-          internalExamTotalMarks:
-              double.tryParse(_totalControllers[id]?.text ?? '0') ?? 0,
-          teacherEvaluationScore:
-              double.tryParse(_evalControllers[id]?.text ?? '0') ?? 0,
-        );
+        for (final m in termMarksheets) {
+          final id = m['_id']?.toString() ?? '';
+          final studentData = m['studentId'] is Map
+              ? m['studentId'] as Map
+              : <String, dynamic>{};
+          final studentId = studentData['_id']?.toString() ?? '';
+
+          await service.uploadMarksheet(
+            widget.course.id,
+            studentId: studentId,
+            term: _selectedTerm,
+            internalExamMarks:
+                double.tryParse(_marksControllers[id]?.text ?? '0') ?? 0,
+            internalExamTotalMarks:
+                double.tryParse(_totalControllers[id]?.text ?? '0') ?? 0,
+            teacherEvaluationScore:
+                double.tryParse(_evalControllers[id]?.text ?? '0') ?? 0,
+          );
+        }
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Marksheets updated successfully'),
+            content: Text('Marksheets saved successfully'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -131,45 +238,81 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  // Keys for create mode — student IDs are used directly
+  // Keys for edit mode — marksheet IDs are used
+  List<String> get _keys {
+    if (_isCreateMode || _marksheets.isEmpty) return _studentIds;
+    return _marksheets
+        .where((m) => m['term'] == _selectedTerm)
+        .map((m) => m['_id']?.toString() ?? '')
+        .toList();
+  }
+
+  List<String> get _names {
+    if (_isCreateMode || _marksheets.isEmpty) return _studentNames;
+    return _marksheets.where((m) => m['term'] == _selectedTerm).map((m) {
+      final studentData = m['studentId'] is Map
+          ? m['studentId'] as Map
+          : <String, dynamic>{};
+      final userData = studentData['userId'] is Map
+          ? studentData['userId'] as Map
+          : <String, dynamic>{};
+      return userData['name']?.toString() ?? 'Student';
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final termMarksheets = _marksheets
-        .where((m) => m['term'] == _selectedTerm)
-        .toList();
+    final keys = _keys;
+    final names = _names;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Edit Marksheet — ${widget.course.subjectName}',
+          '${_isCreateMode ? 'Enter' : 'Edit'} Marksheet — ${widget.course.subjectName}',
           style: const TextStyle(fontSize: 15),
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-          TextButton(
-            onPressed: _save,
-            child: const Text(
-              'Save',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
+          _isSaving
+              ? const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              : TextButton(
+                  onPressed: _save,
+                  child: const Text(
+                    'Save All',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? Center(child: Text(_error!))
-          : _marksheets.isEmpty
-          ? const Center(child: Text('No marksheets found'))
+          : keys.isEmpty
+          ? const Center(child: Text('No students enrolled in this course'))
           : Column(
               children: [
-                // Term selector
-                if (_terms.length > 1)
+                // Term selector — only in edit mode
+                if (!_isCreateMode && _terms.length > 1)
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: DropdownButtonFormField<int>(
@@ -190,18 +333,36 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                       onChanged: (val) {
                         if (val != null) {
                           setState(() => _selectedTerm = val);
-                          _buildControllers();
+                          _buildControllersFromMarksheets();
                         }
                       },
                     ),
                   ),
 
+                // Term display — in create mode
+                if (_isCreateMode)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    color: AppColors.infoLight,
+                    child: Text(
+                      'Term $_selectedTerm — ${widget.course.subjectName}',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+
                 // Table header
                 Container(
-                  color: AppColors.infoLight,
+                  color: AppColors.primaryDark,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 8,
+                    vertical: 10,
                   ),
                   child: const Row(
                     children: [
@@ -212,6 +373,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -222,6 +384,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -232,6 +395,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -242,6 +406,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -252,25 +417,20 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                 // Student rows
                 Expanded(
                   child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    itemCount: termMarksheets.length,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: keys.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final m = termMarksheets[index];
-                      final id = m['_id']?.toString() ?? '';
-                      final studentData = m['studentId'] is Map
-                          ? m['studentId'] as Map
-                          : <String, dynamic>{};
-                      final userData = studentData['userId'] is Map
-                          ? studentData['userId'] as Map
-                          : <String, dynamic>{};
-                      final name = userData['name'] ?? 'Student ${index + 1}';
+                      final key = keys[index];
+                      final name = index < names.length
+                          ? names[index]
+                          : 'Student ${index + 1}';
 
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
@@ -283,7 +443,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                             ),
                             Expanded(
                               child: TextField(
-                                controller: _marksControllers[id],
+                                controller: _marksControllers[key],
                                 textAlign: TextAlign.center,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
@@ -293,13 +453,14 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                                     vertical: 8,
                                   ),
                                   border: OutlineInputBorder(),
+                                  hintText: '0',
                                 ),
                               ),
                             ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: TextField(
-                                controller: _totalControllers[id],
+                                controller: _totalControllers[key],
                                 textAlign: TextAlign.center,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
@@ -309,13 +470,14 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                                     vertical: 8,
                                   ),
                                   border: OutlineInputBorder(),
+                                  hintText: '0',
                                 ),
                               ),
                             ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: TextField(
-                                controller: _evalControllers[id],
+                                controller: _evalControllers[key],
                                 textAlign: TextAlign.center,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
@@ -325,6 +487,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                                     vertical: 8,
                                   ),
                                   border: OutlineInputBorder(),
+                                  hintText: '0',
                                 ),
                               ),
                             ),
