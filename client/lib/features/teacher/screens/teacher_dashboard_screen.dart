@@ -1,16 +1,14 @@
+import 'package:client/shared/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:convert';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/network/app_router.dart';
 import '../../../core/storage/secure_storage.dart';
 import 'tabs/teacher_home_tab.dart';
 import 'tabs/teacher_courses_tab.dart';
 import 'tabs/teacher_grading_tab.dart';
-import 'tabs/teacher_profile_tab.dart';
 
 class TeacherDashboardScreen extends ConsumerStatefulWidget {
   const TeacherDashboardScreen({super.key});
@@ -39,11 +37,6 @@ class _TeacherDashboardScreenState
     }
   }
 
-  Future<void> _logout() async {
-    await SecureStorage.clearAll();
-    if (mounted) context.go(AppRouter.login);
-  }
-
   @override
   Widget build(BuildContext context) {
     final tabs = [
@@ -53,18 +46,15 @@ class _TeacherDashboardScreenState
       ),
       const TeacherCoursesTab(),
       const TeacherGradingTab(),
-      const TeacherProfileTab(),
     ];
 
     return PopScope(
-      canPop: false, // prevents back gesture from exiting
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_currentIndex != 0) {
-          // If not on home tab, go back to home tab
           setState(() => _currentIndex = 0);
         } else {
-          // If on home tab, show exit confirmation
           _showExitDialog(context);
         }
       },
@@ -76,7 +66,13 @@ class _TeacherDashboardScreenState
                 : _tabTitle(_currentIndex),
           ),
           actions: [
-            IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+            // Profile icon — pushes profile screen on top
+            IconButton(
+              icon: const Icon(Icons.person_outline),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+            ),
           ],
         ),
         body: tabs[_currentIndex],
@@ -102,11 +98,6 @@ class _TeacherDashboardScreenState
               activeIcon: Icon(Icons.grading),
               label: 'Grading',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outlined),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
           ],
         ),
       ),
@@ -131,9 +122,7 @@ class _TeacherDashboardScreenState
         ],
       ),
     );
-
     if (shouldExit == true && context.mounted) {
-      // Actually exit the app
       SystemNavigator.pop();
     }
   }
@@ -144,8 +133,6 @@ class _TeacherDashboardScreenState
         return 'My Courses';
       case 2:
         return 'Grading';
-      case 3:
-        return 'Profile';
       default:
         return AppConstants.appName;
     }

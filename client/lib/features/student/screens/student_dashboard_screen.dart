@@ -1,11 +1,10 @@
+import 'package:client/shared/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:convert';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/network/app_router.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../providers/student_providers.dart';
 import 'tabs/home_tab.dart';
@@ -43,11 +42,6 @@ class _StudentDashboardScreenState
     }
   }
 
-  Future<void> _logout() async {
-    await SecureStorage.clearAll();
-    if (mounted) context.go(AppRouter.login);
-  }
-
   @override
   Widget build(BuildContext context) {
     final tabs = [
@@ -61,14 +55,12 @@ class _StudentDashboardScreenState
     ];
 
     return PopScope(
-      canPop: false, // prevents back gesture from exiting
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_currentIndex != 0) {
-          // If not on home tab, go back to home tab
           setState(() => _currentIndex = 0);
         } else {
-          // If on home tab, show exit confirmation
           _showExitDialog(context);
         }
       },
@@ -80,6 +72,7 @@ class _StudentDashboardScreenState
                 : _tabTitle(_currentIndex),
           ),
           actions: [
+            // Notification bell
             Consumer(
               builder: (context, ref, _) {
                 final notifications = ref.watch(studentNotificationsProvider);
@@ -121,7 +114,14 @@ class _StudentDashboardScreenState
                 );
               },
             ),
-            IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+
+            // Profile icon
+            IconButton(
+              icon: const Icon(Icons.person_outline),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+            ),
           ],
         ),
         body: tabs[_currentIndex],
@@ -191,9 +191,7 @@ class _StudentDashboardScreenState
         ],
       ),
     );
-
     if (shouldExit == true && context.mounted) {
-      // Actually exit the app
       SystemNavigator.pop();
     }
   }

@@ -1,10 +1,9 @@
+import 'package:client/shared/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:convert';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/network/app_router.dart';
 import '../../../core/storage/secure_storage.dart';
 import 'sections/admin_home_section.dart';
 import 'sections/admin_teachers_section.dart';
@@ -39,22 +38,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    await SecureStorage.clearAll();
-    if (mounted) context.go(AppRouter.login);
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // prevents back gesture from exiting
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_currentSection != 0) {
-          // If not on home tab, go back to home tab
           setState(() => _currentSection = 0);
         } else {
-          // If on home tab, show exit confirmation
           _showExitDialog(context);
         }
       },
@@ -68,7 +60,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 )
               : null,
           actions: [
-            IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+            // Profile icon — pushes profile screen on top
+            IconButton(
+              icon: const Icon(Icons.person_outline),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+            ),
           ],
         ),
         body: _buildSection(),
@@ -94,7 +92,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         ],
       ),
     );
-
     if (shouldExit == true && context.mounted) {
       SystemNavigator.pop();
     }
