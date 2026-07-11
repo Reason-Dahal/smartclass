@@ -47,7 +47,10 @@ class _TeacherDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      TeacherHomeTab(userName: _userName),
+      TeacherHomeTab(
+        userName: _userName,
+        onNavigateToCourses: () => setState(() => _currentIndex = 1),
+      ),
       const TeacherCoursesTab(),
       const TeacherGradingTab(),
       const TeacherProfileTab(),

@@ -67,6 +67,8 @@ const takeAttendance = async (req, res) => {
       )
     );
 
+    Course.incrementUsage(req.params.courseId);
+
     res.status(200).json({
       success: true,
       data: {
@@ -354,6 +356,8 @@ const createAssignment = async (req, res) => {
       if (notifications.length > 0) {
         await Notification.insertMany(notifications, { ordered: false });
       }
+
+      Course.incrementUsage(req.params.courseId);
   
       res.status(201).json({
         success: true,
@@ -560,11 +564,15 @@ const createAssignment = async (req, res) => {
       if (notifications.length > 0) {
         await Notification.insertMany(notifications, { ordered: false });
       }
-  
+
+      Course.incrementUsage(req.params.courseId);
+
       res.status(201).json({
         success: true,
         data: { note },
       });
+      
+
     } catch (error) {
       res.status(500).json({
         success: false,
@@ -650,11 +658,14 @@ const createAssignment = async (req, res) => {
         },
         { upsert: true, new: true, runValidators: true }
       );
+
+      Course.incrementUsage(req.params.courseId);
   
       res.status(200).json({
         success: true,
         data: { marksheet },
       });
+      
     } catch (error) {
       res.status(500).json({
         success: false,

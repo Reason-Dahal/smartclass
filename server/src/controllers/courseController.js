@@ -182,10 +182,13 @@ const getTeacherCourses = async (req, res) => {
       });
     }
 
+    // V2 — sort by usageCount descending (most used first)
     const courses = await Course.find({
       teacherId: teacher._id,
-      isActive: true,
-    }).populate('programId', 'name type');
+      isActive:  true,
+    })
+      .populate('programId', 'name type totalTerms')
+      .sort({ usageCount: -1, lastUsedAt: -1 });
 
     // Add student count to each course
     const coursesWithCount = await Promise.all(
@@ -194,13 +197,22 @@ const getTeacherCourses = async (req, res) => {
           courseId: course._id,
           isActive: true,
         });
-        return { ...course.toObject(), studentCount };
+        return {
+          ...course.toObject(),
+          studentCount,
+        };
       })
     );
 
+    // V2 — top 5 most used as shortcuts for home tab
+    const shortcuts = coursesWithCount.slice(0, 5);
+
     res.status(200).json({
       success: true,
-      data: { courses: coursesWithCount },
+      data: {
+        courses:   coursesWithCount,
+        shortcuts,
+      },
     });
   } catch (error) {
     res.status(500).json({

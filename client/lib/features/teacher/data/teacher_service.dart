@@ -65,6 +65,22 @@ class TeacherService {
     }
   }
 
+  Future<List<TeacherCourseModel>> getMyShortcuts() async {
+    try {
+      final response = await _dio.get(ApiConstants.teacherCourses);
+      final shortcuts = response.data['data']['shortcuts'] as List;
+      return shortcuts.map((e) => TeacherCourseModel.fromJson(e)).toList();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   // ─── ATTENDANCE ──────────────────────────────────────────────────
 
   Future<List<AttendanceRecordModel>> getAttendance(

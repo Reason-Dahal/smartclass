@@ -10,6 +10,12 @@ final teacherCoursesProvider = FutureProvider<List<TeacherCourseModel>>((
   return ref.read(teacherServiceProvider).getMyCourses();
 });
 
+final teacherShortcutsProvider = FutureProvider<List<TeacherCourseModel>>((
+  ref,
+) async {
+  return ref.read(teacherServiceProvider).getMyShortcuts();
+});
+
 final selectedCourseProvider = StateProvider<TeacherCourseModel?>(
   (ref) => null,
 );
