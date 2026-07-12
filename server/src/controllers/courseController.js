@@ -54,6 +54,34 @@ const createCourse = async (req, res) => {
       isElective: isElective || false,
     });
 
+// Auto-enroll existing students into this course, only if compulsory.
+    // Electives remain student-initiated via enrollElective — never auto-enrolled.
+    if (!course.isElective) {
+      const matchingStudents = await Student.find({ programId })
+        .populate('batchId', 'currentTerm')
+        .populate('userId', 'status');
+
+      // Filter out students whose linked User account is inactive/suspended —
+      // Student itself has no isActive field, status lives on the linked User
+      const activeStudents = matchingStudents.filter(
+        (student) => student.userId?.status === 'active'
+      );
+
+      const studentsInTerm = activeStudents.filter(
+        (student) => student.batchId?.currentTerm === term
+      );
+
+      if (studentsInTerm.length > 0) {
+        const enrollments = studentsInTerm.map((student) => ({
+          studentId: student._id,
+          courseId: course._id,
+          enrollmentType: 'compulsory',
+        }));
+
+        await Enrollment.insertMany(enrollments, { ordered: false }).catch(() => {});
+      }
+    }
+
     await course.populate([
       { path: 'programId', select: 'name type' },
       { path: 'teacherId', select: 'userId department', populate: { path: 'userId', select: 'name email' } },
