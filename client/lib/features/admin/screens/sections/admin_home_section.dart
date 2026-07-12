@@ -39,7 +39,7 @@ class AdminHomeSection extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Welcome back',
               style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
@@ -128,12 +128,7 @@ class AdminHomeSection extends ConsumerWidget {
                   color: AppColors.danger,
                   onTap: () => _showUploadFinalResults(context, ref),
                 ),
-                ActionCard(
-                  icon: Icons.menu_book_outlined,
-                  label: 'Courses',
-                  color: AppColors.primaryDark,
-                  onTap: () => onNavigate(5),
-                ),
+
                 ActionCard(
                   icon: Icons.tune_outlined,
                   label: 'Eval Config',
