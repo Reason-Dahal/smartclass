@@ -11,6 +11,7 @@ import '../../shared/screens/pdf_viewer_screen.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
 import '../../features/auth/screens/verify_otp_screen.dart';
 import '../../features/auth/screens/reset_password_screen.dart';
+import 'dart:convert';
 // import '../constants/app_constants.dart';
 
 class AppRouter {
@@ -43,9 +44,22 @@ class AppRouter {
       if (token != null && isPublicRoute) {
         final userJson = await SecureStorage.getUser();
         if (userJson != null) {
-          if (userJson.contains('"role":"admin"')) return adminDashboard;
-          if (userJson.contains('"role":"teacher"')) return teacherDashboard;
-          return studentDashboard;
+          try {
+            final user = jsonDecode(userJson) as Map<String, dynamic>;
+            final role = user['role'] as String? ?? '';
+            switch (role) {
+              case 'admin':
+                return adminDashboard;
+              case 'teacher':
+                return teacherDashboard;
+              case 'student':
+                return studentDashboard;
+              default:
+                return login; // unknown role — force re-login rather than guessing
+            }
+          } catch (_) {
+            return login; // corrupted user data — force re-login
+          }
         }
       }
 
