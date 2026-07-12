@@ -3,6 +3,10 @@ const { generateToken } = require('../utils/jwt.js');
 const sendEmail = require('../utils/email');
 const crypto    = require('crypto');
 
+// Hash OTP/reset tokens before storing — protects against DB leaks.
+const hashToken = (token) =>
+  crypto.createHash('sha256').update(token).digest('hex');
+
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -144,8 +148,6 @@ const forgotPassword = async (req, res) => {
 
     const user = await User.findOne({ email }).select('+otpCode +otpExpiry');
     if (!user) {
-      // Return success even if user not found — security best practice
-      // Prevents email enumeration attacks
       return res.status(200).json({
         success: true,
         data: { message: 'If this email exists, an OTP has been sent' },
@@ -162,15 +164,15 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    // Generate 6-digit OTP
+    // Generate 6-digit OTP — this is what gets emailed, plain
     const otp       = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    user.otpCode   = otp;
+    // Only the HASH is stored — plain OTP never touches the database
+    user.otpCode   = hashToken(otp);
     user.otpExpiry = otpExpiry;
     await user.save({ validateBeforeSave: false });
 
-    // Send OTP email
     await sendEmail({
       to:      user.email,
       subject: 'SmartClass — Password Reset OTP',
@@ -233,15 +235,14 @@ const verifyOtp = async (req, res) => {
       });
     }
 
-    // Check OTP matches
-    if (user.otpCode !== otp) {
+    // Compare hash of submitted OTP against stored hash
+    if (!user.otpCode || user.otpCode !== hashToken(otp)) {
       return res.status(400).json({
         success: false,
         error: { code: 'INVALID_OTP', message: 'Invalid OTP' },
       });
     }
 
-    // Check OTP not expired
     if (!user.otpExpiry || user.otpExpiry < new Date()) {
       return res.status(400).json({
         success: false,
@@ -252,11 +253,11 @@ const verifyOtp = async (req, res) => {
       });
     }
 
-    // Generate a short-lived reset token
+    // Generate a short-lived reset token — this is what's returned to Flutter, plain
     const resetToken = crypto.randomBytes(32).toString('hex');
 
-    // Store hashed reset token — expires in 15 minutes
-    user.otpCode   = resetToken; // reuse otpCode field for reset token
+    // Only the HASH is stored — plain token never touches the database
+    user.otpCode   = hashToken(resetToken); // reuse otpCode field for reset token
     user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
@@ -264,7 +265,7 @@ const verifyOtp = async (req, res) => {
       success: true,
       data: {
         message:    'OTP verified successfully',
-        resetToken, // sent to Flutter to use in next step
+        resetToken, // plain token sent to Flutter — never stored plain
         email,
       },
     });
@@ -302,15 +303,14 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // Verify reset token
-    if (user.otpCode !== resetToken) {
+    // Compare hash of submitted token against stored hash
+    if (!user.otpCode || user.otpCode !== hashToken(resetToken)) {
       return res.status(400).json({
         success: false,
         error: { code: 'INVALID_TOKEN', message: 'Invalid reset token' },
       });
     }
 
-    // Check token not expired
     if (!user.otpExpiry || user.otpExpiry < new Date()) {
       return res.status(400).json({
         success: false,
@@ -321,7 +321,6 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // Set new password and clear OTP fields
     user.password  = newPassword;
     user.otpCode   = null;
     user.otpExpiry = null;
