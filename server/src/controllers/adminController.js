@@ -309,6 +309,25 @@ const createStudent = async (req, res) => {
       rollNumber,
     });
 
+    // Auto-enroll student into all compulsory courses for their program + current term
+    const compulsoryCourses = await Course.find({
+      programId,
+      term: batch.currentTerm,
+      isElective: false,
+      isActive: true,
+    });
+
+    if (compulsoryCourses.length > 0) {
+      const enrollments = compulsoryCourses.map((course) => ({
+        studentId: student._id,
+        courseId: course._id,
+        enrollmentType: 'compulsory',
+      }));
+
+      // ordered: false — continues even if a duplicate somehow already exists
+      await Enrollment.insertMany(enrollments, { ordered: false }).catch(() => {});
+    }
+
 try {
   await sendEmail({
     to: email,
