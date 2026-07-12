@@ -150,6 +150,22 @@ class AdminCoursesSection extends ConsumerWidget {
                 _showEditCourse(context, ref, c);
               },
             ),
+            // Manage Enrollment
+            ListTile(
+              leading: const Icon(
+                Icons.group_add_outlined,
+                color: AppColors.primary,
+              ),
+              title: const Text('Manage Enrollment'),
+              subtitle: const Text(
+                'View and add students to this course',
+                style: TextStyle(fontSize: 11),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showEnrollmentManager(context, ref, c);
+              },
+            ),
 
             // Deactivate or Reactivate
             if (c.isActive)
@@ -349,6 +365,186 @@ class AdminCoursesSection extends ConsumerWidget {
                     }
                   },
                   child: const Text('Save'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  void _showEnrollmentManager(
+    BuildContext context,
+    WidgetRef ref,
+    CourseModel c,
+  ) async {
+    final service = ref.read(adminServiceProvider);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final status = await service.getCourseEnrollmentStatus(c.id);
+      if (context.mounted) Navigator.pop(context);
+
+      final enrolled = (status['enrolled'] as List)
+          .cast<Map<String, dynamic>>();
+      final notEnrolled = (status['notEnrolled'] as List)
+          .cast<Map<String, dynamic>>();
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setState) => AlertDialog(
+              title: Text('Enrollment — ${c.subjectName}'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 480,
+                child: DefaultTabController(
+                  length: 2,
+                  child: Column(
+                    children: [
+                      TabBar(
+                        labelColor: AppColors.primary,
+                        unselectedLabelColor: AppColors.textMuted,
+                        tabs: [
+                          Tab(text: 'Enrolled (${enrolled.length})'),
+                          Tab(text: 'Not Enrolled (${notEnrolled.length})'),
+                        ],
+                      ),
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            // Enrolled tab
+                            enrolled.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                      'No students enrolled yet',
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    itemCount: enrolled.length,
+                                    itemBuilder: (context, i) {
+                                      final s = enrolled[i];
+                                      return ListTile(
+                                        dense: true,
+                                        leading: const Icon(
+                                          Icons.check_circle,
+                                          color: AppColors.success,
+                                          size: 20,
+                                        ),
+                                        title: Text(
+                                          s['name'] ?? '',
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                        subtitle: Text(
+                                          s['rollNumber'] ?? '',
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                      );
+                                    },
+                                  ),
+
+                            // Not enrolled tab
+                            notEnrolled.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                      'All eligible students are enrolled',
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    itemCount: notEnrolled.length,
+                                    itemBuilder: (context, i) {
+                                      final s = notEnrolled[i];
+                                      return ListTile(
+                                        dense: true,
+                                        leading: const Icon(
+                                          Icons.person_outline,
+                                          color: AppColors.textMuted,
+                                          size: 20,
+                                        ),
+                                        title: Text(
+                                          s['name'] ?? '',
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                        subtitle: Text(
+                                          s['rollNumber'] ?? '',
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                        trailing: TextButton(
+                                          onPressed: () async {
+                                            try {
+                                              await service.manualEnroll(
+                                                studentId: s['studentId']
+                                                    .toString(),
+                                                courseId: c.id,
+                                              );
+                                              setState(() {
+                                                notEnrolled.removeAt(i);
+                                                enrolled.add(s);
+                                              });
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      '${s['name']} enrolled',
+                                                    ),
+                                                    backgroundColor:
+                                                        AppColors.success,
+                                                  ),
+                                                );
+                                              }
+                                            } catch (e) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(e.toString()),
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                          child: const Text('Enroll'),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    ref.invalidate(adminCoursesProvider);
+                  },
+                  child: const Text('Close'),
                 ),
               ],
             ),

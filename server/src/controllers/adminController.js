@@ -16,7 +16,7 @@ const Submission = require('../models/Submission');
 // const { uploadToCloudinary } = require('../utils/upload');
 const { uploadToCloudinary, uploadResultToCloudinary } = require('../utils/upload');
 
-// ─── TEACHER MANAGEMENT ───────────────────────────────────────────
+//TEACHER MANAGEMENT 
 
 const createTeacher = async (req, res) => {
   try {
@@ -168,7 +168,7 @@ const updateTeacher = async (req, res) => {
   }
 };
 
-// ─── EDIT TEACHER ────────────────────────────────────────────────
+//EDIT TEACHER 
 const editTeacher = async (req, res) => {
   try {
     const { name, email, department } = req.body;
@@ -222,7 +222,7 @@ const editTeacher = async (req, res) => {
   }
 };
 
-// ─── DEACTIVATE TEACHER ──────────────────────────────────────────
+// DEACTIVATE TEACHER 
 const deactivateTeacher = async (req, res) => {
   try {
     const teacher = await Teacher.findById(req.params.id);
@@ -247,7 +247,7 @@ const deactivateTeacher = async (req, res) => {
   }
 };
 
-// ─── STUDENT MANAGEMENT ───────────────────────────────────────────
+//  STUDENT MANAGEMENT 
 
 const createStudent = async (req, res) => {
   try {
@@ -477,7 +477,7 @@ const deactivateStudent = async (req, res) => {
     });
   }
 };
-// ─── ACCOUNT STATUS ───────────────────────────────────────────────
+// ACCOUNT STATUS
 
 const updateUserStatus = async (req, res) => {
   try {
@@ -528,7 +528,7 @@ const updateUserStatus = async (req, res) => {
   }
 };
 
-// ─── PROGRAM MANAGEMENT ──────────────────────────────────────────
+//PROGRAM MANAGEMENT 
 
 const createProgram = async (req, res) => {
   try {
@@ -637,7 +637,7 @@ const deactivateProgram = async (req, res) => {
   }
 };
 
-// ─── BATCH MANAGEMENT ────────────────────────────────────────────
+// BATCH MANAGEMENT
 
 const createBatch = async (req, res) => {
   try {
@@ -782,7 +782,7 @@ const promoteBatch = async (req, res) => {
   }
 };
 
-// ─── UPDATE BATCH ────────────────────────────────────────────────
+// UPDATE BATCH 
 const updateBatch = async (req, res) => {
   try {
     const { name, intakeYear, isActive } = req.body;
@@ -812,7 +812,7 @@ const updateBatch = async (req, res) => {
   }
 };
 
-// ─── DEACTIVATE BATCH ────────────────────────────────────────────
+//  DEACTIVATE BATCH 
 const deactivateBatch = async (req, res) => {
   try {
     const batch = await Batch.findById(req.params.id);
@@ -869,7 +869,7 @@ const resetUserPassword = async (req, res) => {
   }
 };
 
-// ─── ACADEMIC OVERRIDES (FR-ADM-09) ──────────────────────────────
+//ACADEMIC OVERRIDES 
 
 const overrideAttendance = async (req, res) => {
   try {
@@ -940,7 +940,7 @@ const overrideMarksheet = async (req, res) => {
   }
 };
 
-// ─── ENROLLMENT MANAGEMENT ───────────────────────────────────────
+//  ENROLLMENT MANAGEMENT 
 const manualEnroll = async (req, res) => {
   try {
     const { studentId, courseId } = req.body;
@@ -986,7 +986,81 @@ const manualEnroll = async (req, res) => {
 };
 
 
-// ─── FINAL RESULTS (FR-ADM-12) ───────────────────────────────────
+const getCourseEnrollmentStatus = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    // All active students matching this course's program + term
+    const candidateStudents = await Student.find({ programId: course.programId })
+      .populate('batchId', 'currentTerm')
+      .populate('userId', 'name email status')
+      .select('rollNumber batchId userId');
+
+    const eligibleStudents = candidateStudents.filter(
+      (student) =>
+        student.userId?.status === 'active' &&
+        student.batchId?.currentTerm === course.term
+    );
+
+    // Existing enrollments for this course, so we know who's already in
+    const existingEnrollments = await Enrollment.find({
+      courseId,
+      isActive: true,
+    }).select('studentId');
+
+    const enrolledStudentIds = new Set(
+      existingEnrollments.map((e) => e.studentId.toString())
+    );
+
+    const enrolled = [];
+    const notEnrolled = [];
+
+    for (const student of eligibleStudents) {
+      const entry = {
+        studentId: student._id,
+        rollNumber: student.rollNumber,
+        name: student.userId?.name || '',
+        email: student.userId?.email || '',
+      };
+
+      if (enrolledStudentIds.has(student._id.toString())) {
+        enrolled.push(entry);
+      } else {
+        notEnrolled.push(entry);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        course: {
+          id: course._id,
+          subjectName: course.subjectName,
+          term: course.term,
+          isElective: course.isElective,
+        },
+        enrolled,
+        notEnrolled,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+
+// FINAL RESULTS 
 
 const uploadFinalResults = async (req, res) => {
   try {
@@ -1050,7 +1124,7 @@ const uploadFinalResults = async (req, res) => {
   }
 };
 
-// ─── EVALUATION CONFIG (FR-ADM-06) ───────────────────────────────
+// EVALUATION CONFIG 
 
 const getEvaluationConfig = async (req, res) => {
   try {
@@ -1130,7 +1204,7 @@ const updateEvaluationConfig = async (req, res) => {
   }
 };
 
-// ─── SYSTEM REPORTS (FR-ADM-07) ──────────────────────────────────
+// SYSTEM REPORTS
 
 const getSystemReports = async (req, res) => {
   try {
@@ -1209,7 +1283,8 @@ module.exports = {
   updateUserStatus, resetUserPassword,
   createProgram, getPrograms, updateProgram,
   createBatch, getBatches, getAllBatches, promoteBatch,
-  manualEnroll, 
+  manualEnroll,
+  getCourseEnrollmentStatus, 
   overrideAttendance, overrideMarksheet,
   uploadFinalResults,
   getEvaluationConfig, updateEvaluationConfig,

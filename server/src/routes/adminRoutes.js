@@ -12,6 +12,7 @@ const {
   updateUserStatus,
   resetUserPassword,
   manualEnroll,
+  getCourseEnrollmentStatus,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -41,5 +42,6 @@ router.patch('/users/reset-password', resetUserPassword);
 
 //Enroll
 router.post('/enroll', manualEnroll);
+router.get('/courses/:courseId/enrollment-status', getCourseEnrollmentStatus);
 
 module.exports = router;

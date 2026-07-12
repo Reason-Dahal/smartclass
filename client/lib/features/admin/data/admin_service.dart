@@ -573,6 +573,45 @@ class AdminService {
     }
   }
 
+  Future<Map<String, dynamic>> getCourseEnrollmentStatus(
+    String courseId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.courseEnrollmentStatus}/$courseId/enrollment-status',
+      );
+      return response.data['data'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> manualEnroll({
+    required String studentId,
+    required String courseId,
+  }) async {
+    try {
+      await _dio.post(
+        ApiConstants.enroll,
+        data: {'studentId': studentId, 'courseId': courseId},
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   //Evaluation
   Future<Map<String, dynamic>> getEvaluationConfig() async {
     try {

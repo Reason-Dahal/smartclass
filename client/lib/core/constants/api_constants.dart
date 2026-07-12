@@ -24,6 +24,7 @@ class ApiConstants {
   static const String userStatus = '/admin/users';
   static const String resetPassword = '/admin/users/reset-password';
   static const String enroll = '/admin/enroll';
+  static const String courseEnrollmentStatus = '/admin/courses';
 
   // Admin — Programs & Batches
   static const String programs = '/admin/programs';
