@@ -108,12 +108,8 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
     _studentNames.clear();
 
     for (final student in _students) {
-      // studentId is nested inside userId population
-      final userId = student['userId'] is Map
-          ? student['userId'] as Map
-          : <String, dynamic>{};
-      final id = student['_id']?.toString() ?? '';
-      final name = userId['name']?.toString() ?? 'Student';
+      final id = student['studentId']?.toString() ?? '';
+      final name = student['name']?.toString() ?? 'Student';
 
       _studentIds.add(id);
       _studentNames.add(name);
@@ -179,48 +175,54 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
     final service = ref.read(teacherServiceProvider);
 
     try {
+      // Build the marksheets payload — one entry per student, regardless of mode.
+      final List<Map<String, dynamic>> payload;
+
       if (_isCreateMode || _marksheets.isEmpty) {
-        // Create mode — use student IDs directly
-        for (int i = 0; i < _studentIds.length; i++) {
-          final studentId = _studentIds[i];
-          await service.uploadMarksheet(
-            widget.course.id,
-            studentId: studentId,
-            term: _selectedTerm,
-            internalExamMarks:
+        // Create mode — controllers keyed by student ID directly
+        payload = _studentIds.map((studentId) {
+          return {
+            'studentId': studentId,
+            'internalExamMarks':
                 double.tryParse(_marksControllers[studentId]?.text ?? '0') ?? 0,
-            internalExamTotalMarks:
+            'internalExamTotalMarks':
                 double.tryParse(_totalControllers[studentId]?.text ?? '0') ?? 0,
-            teacherEvaluationScore:
+            'teacherEvaluationScore':
                 double.tryParse(_evalControllers[studentId]?.text ?? '0') ?? 0,
-          );
-        }
+          };
+        }).toList();
       } else {
-        // Edit mode — use marksheet IDs
+        // Edit mode — controllers keyed by marksheet ID
         final termMarksheets = _marksheets
             .where((m) => m['term'] == _selectedTerm)
             .toList();
 
-        for (final m in termMarksheets) {
+        payload = termMarksheets.map((m) {
           final id = m['_id']?.toString() ?? '';
           final studentData = m['studentId'] is Map
               ? m['studentId'] as Map
               : <String, dynamic>{};
           final studentId = studentData['_id']?.toString() ?? '';
 
-          await service.uploadMarksheet(
-            widget.course.id,
-            studentId: studentId,
-            term: _selectedTerm,
-            internalExamMarks:
+          return {
+            'studentId': studentId,
+            'internalExamMarks':
                 double.tryParse(_marksControllers[id]?.text ?? '0') ?? 0,
-            internalExamTotalMarks:
+            'internalExamTotalMarks':
                 double.tryParse(_totalControllers[id]?.text ?? '0') ?? 0,
-            teacherEvaluationScore:
+            'teacherEvaluationScore':
                 double.tryParse(_evalControllers[id]?.text ?? '0') ?? 0,
-          );
-        }
+          };
+        }).toList();
       }
+
+      // Single request — backend wraps this in a transaction.
+      // Either every student in this batch saves, or none do.
+      await service.bulkUploadMarksheets(
+        widget.course.id,
+        term: _selectedTerm,
+        marksheets: payload,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -233,9 +235,11 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Save failed — nothing was changed. ${e.toString()}'),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

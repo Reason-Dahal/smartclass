@@ -675,6 +675,8 @@ const createAssignment = async (req, res) => {
   };
   
   const bulkUploadMarksheets = async (req, res) => {
+    const session = await Marksheet.startSession();
+  
     try {
       const { courseId } = req.params;
       const { term, marksheets } = req.body;
@@ -702,20 +704,27 @@ const createAssignment = async (req, res) => {
         });
       }
   
-      const results = await Promise.all(
-        marksheets.map(({ studentId, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore }) =>
-          Marksheet.findOneAndUpdate(
-            { studentId, courseId, term },
-            {
-              studentId, courseId, term,
-              internalExamMarks, internalExamTotalMarks,
-              teacherEvaluationScore,
-              uploadedBy: req.user._id,
-            },
-            { upsert: true, new: true, runValidators: true }
+      let results;
+  
+      // Transaction — either every marksheet in this batch is saved, or none are.
+      // If any single write fails (validation, connection blip, etc.), the whole
+      // batch rolls back — no silent partial saves.
+      await session.withTransaction(async () => {
+        results = await Promise.all(
+          marksheets.map(({ studentId, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore }) =>
+            Marksheet.findOneAndUpdate(
+              { studentId, courseId, term },
+              {
+                studentId, courseId, term,
+                internalExamMarks, internalExamTotalMarks,
+                teacherEvaluationScore,
+                uploadedBy: req.user._id,
+              },
+              { upsert: true, new: true, runValidators: true, session }
+            )
           )
-        )
-      );
+        );
+      });
   
       res.status(200).json({
         success: true,
@@ -727,8 +736,13 @@ const createAssignment = async (req, res) => {
     } catch (error) {
       res.status(500).json({
         success: false,
-        error: { code: 'SERVER_ERROR', message: error.message },
+        error: {
+          code: 'SERVER_ERROR',
+          message: `Batch save failed and was rolled back: ${error.message}`,
+        },
       });
+    } finally {
+      await session.endSession();
     }
   };
 

@@ -328,6 +328,27 @@ class TeacherService {
     }
   }
 
+  Future<void> bulkUploadMarksheets(
+    String courseId, {
+    required int term,
+    required List<Map<String, dynamic>> marksheets,
+  }) async {
+    try {
+      await _dio.post(
+        '/teacher/courses/$courseId/marksheets/bulk',
+        data: {'term': term, 'marksheets': marksheets},
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   //Attendance
   Future<List<Map<String, dynamic>>> getCourseStudents(String courseId) async {
     try {
