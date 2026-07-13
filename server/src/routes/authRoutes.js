@@ -15,7 +15,8 @@ const { protect } = require('../middleware/auth');
 // Login — prevent password brute-forcing
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,   // 15 minutes
-  max: 10,                     // 10 attempts per window per IP
+  max: 10,                     // 10 FAILED attempts per window per IP
+  skipSuccessfulRequests: true, // successful logins don't count against the limit
   message: {
     success: false,
     error: {
