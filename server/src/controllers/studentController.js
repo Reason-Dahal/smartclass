@@ -466,7 +466,7 @@ const getEvaluationIndicator = async (req, res) => {
         success: false,
         error: {
           code: 'EVALUATION_DISABLED',
-          message: 'Evaluation indicator is not enabled for this course',
+          message: 'Your teacher has not enabled evaluation for this course yet. Please check back later.',
         },
       });
     }

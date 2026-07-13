@@ -227,18 +227,18 @@ class _EvaluationResult extends ConsumerWidget {
       error: (e, _) {
         // If evaluation is disabled for this course
         if (e.toString().contains('EVALUATION_DISABLED')) {
-          return Center(
+          return const Center(
             child: Column(
               children: [
-                const SizedBox(height: 20),
-                const Icon(
+                SizedBox(height: 20),
+                Icon(
                   Icons.visibility_off_outlined,
                   size: 48,
                   color: AppColors.textMuted,
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Evaluation indicator is not\nenabled for this course yet',
+                SizedBox(height: 12),
+                Text(
+                  'Your teacher hasn\'t enabled\nevaluation for this course yet',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.textSecondary,
