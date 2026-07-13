@@ -465,6 +465,7 @@ class TeacherCoursesTab extends ConsumerWidget {
     final titleController = TextEditingController();
     final descController = TextEditingController();
     DateTime? dueDate;
+    bool showTitleError = false;
 
     showDialog(
       context: context,
@@ -476,7 +477,10 @@ class TeacherCoursesTab extends ConsumerWidget {
             children: [
               TextField(
                 controller: titleController,
-                decoration: const InputDecoration(labelText: 'Title'),
+                decoration: InputDecoration(
+                  labelText: 'Title',
+                  errorText: showTitleError ? 'Title cannot be empty' : null,
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -521,11 +525,16 @@ class TeacherCoursesTab extends ConsumerWidget {
             ),
             ElevatedButton(
               onPressed: () async {
-                if (titleController.text.isEmpty || dueDate == null) return;
+                if (titleController.text.trim().isEmpty) {
+                  setState(() => showTitleError = true);
+                  return;
+                }
+                if (dueDate == null) return;
+
                 final service = ref.read(teacherServiceProvider);
                 await service.createAssignment(
                   course.id,
-                  title: titleController.text,
+                  title: titleController.text.trim(),
                   description: descController.text,
                   dueDate: dueDate!.toIso8601String(),
                 );
@@ -552,6 +561,7 @@ class TeacherCoursesTab extends ConsumerWidget {
     final titleController = TextEditingController();
     String? selectedFileUrl;
     bool isUploading = false;
+    bool showTitleError = false;
 
     showDialog(
       context: context,
@@ -563,7 +573,10 @@ class TeacherCoursesTab extends ConsumerWidget {
             children: [
               TextField(
                 controller: titleController,
-                decoration: const InputDecoration(labelText: 'Title'),
+                decoration: InputDecoration(
+                  labelText: 'Title',
+                  errorText: showTitleError ? 'Title cannot be empty' : null,
+                ),
               ),
               const SizedBox(height: 12),
               if (selectedFileUrl == null)
@@ -643,14 +656,19 @@ class TeacherCoursesTab extends ConsumerWidget {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: selectedFileUrl == null || titleController.text.isEmpty
+              onPressed: selectedFileUrl == null
                   ? null
                   : () async {
+                      if (titleController.text.trim().isEmpty) {
+                        setState(() => showTitleError = true);
+                        return;
+                      }
+
                       try {
                         final service = ref.read(teacherServiceProvider);
                         await service.uploadNote(
                           course.id,
-                          title: titleController.text,
+                          title: titleController.text.trim(),
                           fileUrl: selectedFileUrl!,
                         );
                         if (ctx.mounted) Navigator.pop(ctx);

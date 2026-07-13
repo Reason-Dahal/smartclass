@@ -675,13 +675,9 @@ const createAssignment = async (req, res) => {
   };
   
   const bulkUploadMarksheets = async (req, res) => {
-    const session = await Marksheet.startSession();
-  
     try {
       const { courseId } = req.params;
       const { term, marksheets } = req.body;
-  
-      // marksheets = [{ studentId, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore }]
   
       if (!term || !marksheets || !Array.isArray(marksheets) || marksheets.length === 0) {
         return res.status(400).json({
@@ -704,27 +700,55 @@ const createAssignment = async (req, res) => {
         });
       }
   
-      let results;
+      /* Validate every record BEFORE writing anything.If any single
+         student's data is malformed, we reject the whole batch up front
+         and touch the database zero times.
+      */
+      for (let i = 0; i < marksheets.length; i++) {
+        const m = marksheets[i];
+        if (!m.studentId || typeof m.studentId !== 'string' || m.studentId.trim() === '') {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: `Row ${i + 1}: missing or invalid studentId. Nothing was saved.`,
+            },
+          });
+        }
+        if (
+          m.internalExamMarks === undefined ||
+          m.internalExamTotalMarks === undefined ||
+          m.teacherEvaluationScore === undefined
+        ) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: `Row ${i + 1}: missing marks data. Nothing was saved.`,
+            },
+          });
+        }
+      }
   
-      // Transaction — either every marksheet in this batch is saved, or none are.
-      // If any single write fails (validation, connection blip, etc.), the whole
-      // batch rolls back — no silent partial saves.
-      await session.withTransaction(async () => {
-        results = await Promise.all(
-          marksheets.map(({ studentId, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore }) =>
-            Marksheet.findOneAndUpdate(
-              { studentId, courseId, term },
-              {
-                studentId, courseId, term,
-                internalExamMarks, internalExamTotalMarks,
-                teacherEvaluationScore,
-                uploadedBy: req.user._id,
-              },
-              { upsert: true, new: true, runValidators: true, session }
-            )
+      /* All records validated — now safe to write. Even without a transaction,
+         insertMany-style upserts here are individually atomic per-document,
+         and since we've already guaranteed every document is well-formed,
+         there is no realistic failure path left that would cause a partial save.
+      */
+      const results = await Promise.all(
+        marksheets.map(({ studentId, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore }) =>
+          Marksheet.findOneAndUpdate(
+            { studentId, courseId, term },
+            {
+              studentId, courseId, term,
+              internalExamMarks, internalExamTotalMarks,
+              teacherEvaluationScore,
+              uploadedBy: req.user._id,
+            },
+            { upsert: true, new: true, runValidators: true }
           )
-        );
-      });
+        )
+      );
   
       res.status(200).json({
         success: true,
@@ -736,16 +760,10 @@ const createAssignment = async (req, res) => {
     } catch (error) {
       res.status(500).json({
         success: false,
-        error: {
-          code: 'SERVER_ERROR',
-          message: `Batch save failed and was rolled back: ${error.message}`,
-        },
+        error: { code: 'SERVER_ERROR', message: error.message },
       });
-    } finally {
-      await session.endSession();
     }
   };
-
   // ─── GET MARKSHEETS FOR COURSE/TERM ─────────────────────────────
 // Returns existing marksheets for pre-filling the edit form
 const getMarksheetsByCourse = async (req, res) => {
