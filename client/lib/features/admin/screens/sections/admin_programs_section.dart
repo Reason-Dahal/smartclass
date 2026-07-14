@@ -6,11 +6,21 @@ import '../../providers/admin_providers.dart';
 import 'package:client/shared/widgets/loading_widget.dart';
 import 'package:client/shared/widgets/error_widget.dart';
 
-class AdminProgramsSection extends ConsumerWidget {
+class AdminProgramsSection extends ConsumerStatefulWidget {
   const AdminProgramsSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminProgramsSection> createState() =>
+      _AdminProgramsSectionState();
+}
+
+class _AdminProgramsSectionState extends ConsumerState<AdminProgramsSection> {
+  // Tracks which batch IDs currently have a promotion in flight —
+  // prevents double-tapping Promote on the same batch while it saves.
+  final Set<String> _promotingBatchIds = {};
+
+  @override
+  Widget build(BuildContext context) {
     final programs = ref.watch(adminProgramsProvider);
     final batches = ref.watch(adminBatchesProvider);
 
@@ -27,7 +37,7 @@ class AdminProgramsSection extends ConsumerWidget {
         ),
         body: TabBarView(
           children: [
-            // ── PROGRAMS TAB ──────────────────────────────────────
+            //PROGRAMS TAB
             Scaffold(
               body: programs.when(
                 data: (list) => list.isEmpty
@@ -98,7 +108,7 @@ class AdminProgramsSection extends ConsumerWidget {
               ),
             ),
 
-            // ── BATCHES TAB ───────────────────────────────────────
+            // BATCHES TAB
             Scaffold(
               body: batches.when(
                 data: (list) => list.isEmpty
@@ -108,6 +118,7 @@ class AdminProgramsSection extends ConsumerWidget {
                         itemCount: list.length,
                         itemBuilder: (context, index) {
                           final b = list[index];
+                          final isPromoting = _promotingBatchIds.contains(b.id);
                           return Card(
                             margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
@@ -123,7 +134,6 @@ class AdminProgramsSection extends ConsumerWidget {
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // Active/Inactive badge
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
@@ -147,15 +157,35 @@ class AdminProgramsSection extends ConsumerWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 4),
-                                  ElevatedButton(
-                                    onPressed: () =>
-                                        _promoteBatch(context, ref, b),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
-                                      minimumSize: const Size(70, 30),
-                                      textStyle: const TextStyle(fontSize: 12),
-                                    ),
-                                    child: const Text('Promote'),
+                                  // Fixed-size box so the row doesn't jump
+                                  // when swapping between button and spinner
+                                  SizedBox(
+                                    width: 70,
+                                    height: 30,
+                                    child: isPromoting
+                                        ? const Center(
+                                            child: SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          )
+                                        : ElevatedButton(
+                                            onPressed: () =>
+                                                _promoteBatch(context, ref, b),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  AppColors.primary,
+                                              minimumSize: const Size(70, 30),
+                                              padding: EdgeInsets.zero,
+                                              textStyle: const TextStyle(
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            child: const Text('Promote'),
+                                          ),
                                   ),
                                   IconButton(
                                     icon: const Icon(
@@ -163,8 +193,13 @@ class AdminProgramsSection extends ConsumerWidget {
                                       size: 20,
                                       color: AppColors.textMuted,
                                     ),
-                                    onPressed: () =>
-                                        _showBatchOptions(context, ref, b),
+                                    onPressed: isPromoting
+                                        ? null
+                                        : () => _showBatchOptions(
+                                            context,
+                                            ref,
+                                            b,
+                                          ),
                                   ),
                                 ],
                               ),
@@ -187,7 +222,7 @@ class AdminProgramsSection extends ConsumerWidget {
     );
   }
 
-  // ── PROGRAM OPTIONS ─────────────────────────────────────────────
+  // PROGRAM OPTIONS
   void _showProgramOptions(
     BuildContext context,
     WidgetRef ref,
@@ -227,7 +262,6 @@ class AdminProgramsSection extends ConsumerWidget {
                 _showEditProgram(context, ref, p);
               },
             ),
-            // Show Deactivate OR Reactivate based on current status
             if (p.isActive)
               ListTile(
                 leading: const Icon(
@@ -283,53 +317,76 @@ class AdminProgramsSection extends ConsumerWidget {
 
   void _showEditProgram(BuildContext context, WidgetRef ref, ProgramModel p) {
     final nameController = TextEditingController(text: p.name);
+    bool isSubmitting = false;
+    bool showNameError = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit Program'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            labelText: 'Program Name',
-            isDense: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Edit Program'),
+          content: TextField(
+            controller: nameController,
+            enabled: !isSubmitting,
+            decoration: InputDecoration(
+              labelText: 'Program Name',
+              isDense: true,
+              errorText: showNameError ? 'Name cannot be empty' : null,
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (nameController.text.trim().isEmpty) {
+                        setState(() => showNameError = true);
+                        return;
+                      }
+                      setState(() => isSubmitting = true);
+                      try {
+                        await ref
+                            .read(adminServiceProvider)
+                            .editProgram(
+                              programId: p.id,
+                              name: nameController.text.trim(),
+                            );
+                        ref.invalidate(adminProgramsProvider);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Program updated'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setState(() => isSubmitting = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              try {
-                await ref
-                    .read(adminServiceProvider)
-                    .editProgram(
-                      programId: p.id,
-                      name: nameController.text.trim(),
-                    );
-                ref.invalidate(adminProgramsProvider);
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Program updated'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(e.toString())));
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -383,7 +440,7 @@ class AdminProgramsSection extends ConsumerWidget {
     }
   }
 
-  // ── BATCH OPTIONS ───────────────────────────────────────────────
+  // BATCH OPTIONS
   void _showBatchOptions(BuildContext context, WidgetRef ref, BatchModel b) {
     showModalBottomSheet(
       context: context,
@@ -473,67 +530,92 @@ class AdminProgramsSection extends ConsumerWidget {
   void _showEditBatch(BuildContext context, WidgetRef ref, BatchModel b) {
     final nameController = TextEditingController(text: b.name);
     final yearController = TextEditingController(text: b.intakeYear.toString());
+    bool isSubmitting = false;
+    bool showNameError = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit Batch'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Batch Name',
-                isDense: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Edit Batch'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                enabled: !isSubmitting,
+                decoration: InputDecoration(
+                  labelText: 'Batch Name',
+                  isDense: true,
+                  errorText: showNameError ? 'Name cannot be empty' : null,
+                ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: yearController,
+                enabled: !isSubmitting,
+                decoration: const InputDecoration(
+                  labelText: 'Intake Year',
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: yearController,
-              decoration: const InputDecoration(
-                labelText: 'Intake Year',
-                isDense: true,
-              ),
-              keyboardType: TextInputType.number,
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (nameController.text.trim().isEmpty) {
+                        setState(() => showNameError = true);
+                        return;
+                      }
+                      setState(() => isSubmitting = true);
+                      try {
+                        await ref
+                            .read(adminServiceProvider)
+                            .editBatch(
+                              batchId: b.id,
+                              name: nameController.text.trim(),
+                              intakeYear: int.tryParse(yearController.text),
+                            );
+                        ref.invalidate(adminBatchesProvider);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Batch updated'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setState(() => isSubmitting = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await ref
-                    .read(adminServiceProvider)
-                    .editBatch(
-                      batchId: b.id,
-                      name: nameController.text.trim(),
-                      intakeYear: int.tryParse(yearController.text),
-                    );
-                ref.invalidate(adminBatchesProvider);
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Batch updated'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(e.toString())));
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -592,6 +674,34 @@ class AdminProgramsSection extends ConsumerWidget {
     WidgetRef ref,
     BatchModel b,
   ) async {
+    // Batch promotion moves every student in this batch to the next term
+    // and auto-enrolls them in that term's compulsory courses — a real
+    // consequential action, so we confirm before running it, same as
+    // Deactivate.
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Promote Batch'),
+        content: Text(
+          'Promote ${b.name} from Term ${b.currentTerm} to Term '
+          '${b.currentTerm + 1}? All students in this batch will be '
+          'auto-enrolled in the next term\'s compulsory courses.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Promote'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _promotingBatchIds.add(b.id));
     try {
       await ref.read(adminServiceProvider).promoteBatch(b.id);
       ref.invalidate(adminBatchesProvider);
@@ -609,13 +719,19 @@ class AdminProgramsSection extends ConsumerWidget {
           context,
         ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
+    } finally {
+      if (mounted) {
+        setState(() => _promotingBatchIds.remove(b.id));
+      }
     }
   }
 
-  // ── ADD PROGRAM ─────────────────────────────────────────────────
+  //ADD PROGRAM
   void _showAddProgram(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
     String selectedType = 'semester';
+    bool isSubmitting = false;
+    bool showNameError = false;
 
     showDialog(
       context: context,
@@ -627,9 +743,11 @@ class AdminProgramsSection extends ConsumerWidget {
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
+                enabled: !isSubmitting,
+                decoration: InputDecoration(
                   labelText: 'Program Name',
                   isDense: true,
+                  errorText: showNameError ? 'Name cannot be empty' : null,
                 ),
               ),
               const SizedBox(height: 12),
@@ -649,46 +767,64 @@ class AdminProgramsSection extends ConsumerWidget {
                     child: Text('Year (4 years)'),
                   ),
                 ],
-                onChanged: (val) {
-                  if (val != null) setState(() => selectedType = val);
-                },
+                onChanged: isSubmitting
+                    ? null
+                    : (val) {
+                        if (val != null) setState(() => selectedType = val);
+                      },
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.isEmpty) return;
-                try {
-                  await ref
-                      .read(adminServiceProvider)
-                      .createProgram(
-                        name: nameController.text.trim(),
-                        type: selectedType,
-                      );
-                  ref.invalidate(adminProgramsProvider);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Program created'),
-                        backgroundColor: AppColors.success,
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (nameController.text.trim().isEmpty) {
+                        setState(() => showNameError = true);
+                        return;
+                      }
+                      setState(() => isSubmitting = true);
+                      try {
+                        await ref
+                            .read(adminServiceProvider)
+                            .createProgram(
+                              name: nameController.text.trim(),
+                              type: selectedType,
+                            );
+                        ref.invalidate(adminProgramsProvider);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Program created'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setState(() => isSubmitting = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
                       ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(e.toString())));
-                  }
-                }
-              },
-              child: const Text('Create'),
+                    )
+                  : const Text('Create'),
             ),
           ],
         ),
@@ -696,7 +832,7 @@ class AdminProgramsSection extends ConsumerWidget {
     );
   }
 
-  // ── ADD BATCH ───────────────────────────────────────────────────
+  // ADD BATCH
   void _showAddBatch(BuildContext context, WidgetRef ref) async {
     final service = ref.read(adminServiceProvider);
 
@@ -724,6 +860,8 @@ class AdminProgramsSection extends ConsumerWidget {
       final yearController = TextEditingController(
         text: DateTime.now().year.toString(),
       );
+      bool isSubmitting = false;
+      bool showNameError = false;
 
       if (context.mounted) {
         showDialog(
@@ -734,7 +872,6 @@ class AdminProgramsSection extends ConsumerWidget {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Program dropdown — replaces raw ID field
                   DropdownButtonFormField<String>(
                     value: selectedProgramId,
                     decoration: const InputDecoration(
@@ -754,19 +891,24 @@ class AdminProgramsSection extends ConsumerWidget {
                           ),
                         )
                         .toList(),
-                    onChanged: (val) => setState(() => selectedProgramId = val),
+                    onChanged: isSubmitting
+                        ? null
+                        : (val) => setState(() => selectedProgramId = val),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: nameController,
-                    decoration: const InputDecoration(
+                    enabled: !isSubmitting,
+                    decoration: InputDecoration(
                       labelText: 'Batch Name',
                       isDense: true,
+                      errorText: showNameError ? 'Name cannot be empty' : null,
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: yearController,
+                    enabled: !isSubmitting,
                     decoration: const InputDecoration(
                       labelText: 'Intake Year',
                       isDense: true,
@@ -777,41 +919,57 @@ class AdminProgramsSection extends ConsumerWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    if (nameController.text.isEmpty ||
-                        selectedProgramId == null)
-                      return;
-                    try {
-                      await service.createBatch(
-                        programId: selectedProgramId!,
-                        name: nameController.text.trim(),
-                        intakeYear:
-                            int.tryParse(yearController.text) ??
-                            DateTime.now().year,
-                      );
-                      ref.invalidate(adminBatchesProvider);
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Batch created'),
-                            backgroundColor: AppColors.success,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (nameController.text.trim().isEmpty) {
+                            setState(() => showNameError = true);
+                            return;
+                          }
+                          if (selectedProgramId == null) return;
+
+                          setState(() => isSubmitting = true);
+                          try {
+                            await service.createBatch(
+                              programId: selectedProgramId!,
+                              name: nameController.text.trim(),
+                              intakeYear:
+                                  int.tryParse(yearController.text) ??
+                                  DateTime.now().year,
+                            );
+                            ref.invalidate(adminBatchesProvider);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Batch created'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setState(() => isSubmitting = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(e.toString())));
-                      }
-                    }
-                  },
-                  child: const Text('Create'),
+                        )
+                      : const Text('Create'),
                 ),
               ],
             ),
