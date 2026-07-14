@@ -41,6 +41,8 @@ class _AssignmentCardState extends ConsumerState<AssignmentCard> {
             context,
           ).showSnackBar(const SnackBar(content: Text('No file selected')));
         }
+        // User cancelled the file picker — not an error, just reset state
+        // so the button becomes tappable again.
         return;
       }
 
@@ -92,13 +94,13 @@ class _AssignmentCardState extends ConsumerState<AssignmentCard> {
                   ),
                 ),
                 if (widget.assignment.isSubmitted)
-                  _StatusBadge(
+                  const _StatusBadge(
                     label: 'Submitted',
                     color: AppColors.success,
                     bgColor: AppColors.successLight,
                   )
                 else if (widget.assignment.isPastDue)
-                  _StatusBadge(
+                  const _StatusBadge(
                     label: 'Past due',
                     color: AppColors.danger,
                     bgColor: AppColors.dangerLight,
@@ -115,24 +117,37 @@ class _AssignmentCardState extends ConsumerState<AssignmentCard> {
             ),
             if (widget.showSubmit && !widget.assignment.isSubmitted) ...[
               const SizedBox(height: 10),
-              _isUploading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton.icon(
-                      onPressed: _submitAssignment,
-                      icon: const Icon(Icons.upload_file, size: 16),
-                      label: Text(
-                        widget.assignment.isPastDue
-                            ? 'Submit late'
-                            : 'Submit assignment',
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 36),
-                        backgroundColor: widget.assignment.isPastDue
-                            ? AppColors.warning
-                            : AppColors.primary,
-                        textStyle: const TextStyle(fontSize: 13),
-                      ),
-                    ),
+              // Same button, same size, whether idle or submitting —
+              // only the child content swaps. Keeps the layout stable
+              // and matches the loading-state pattern used everywhere
+              // else in the app.
+              ElevatedButton.icon(
+                onPressed: _isUploading ? null : _submitAssignment,
+                icon: _isUploading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.upload_file, size: 16),
+                label: Text(
+                  _isUploading
+                      ? 'Submitting...'
+                      : widget.assignment.isPastDue
+                      ? 'Submit late'
+                      : 'Submit assignment',
+                ),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 36),
+                  backgroundColor: widget.assignment.isPastDue
+                      ? AppColors.warning
+                      : AppColors.primary,
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+              ),
             ],
           ],
         ),
