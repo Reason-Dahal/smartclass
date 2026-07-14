@@ -64,7 +64,6 @@ class AdminCoursesSection extends ConsumerWidget {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Active/Inactive badge
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -138,7 +137,6 @@ class AdminCoursesSection extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
-            // Edit
             ListTile(
               leading: const Icon(
                 Icons.edit_outlined,
@@ -150,7 +148,6 @@ class AdminCoursesSection extends ConsumerWidget {
                 _showEditCourse(context, ref, c);
               },
             ),
-            // Manage Enrollment
             ListTile(
               leading: const Icon(
                 Icons.group_add_outlined,
@@ -167,7 +164,6 @@ class AdminCoursesSection extends ConsumerWidget {
               },
             ),
 
-            // Deactivate or Reactivate
             if (c.isActive)
               ListTile(
                 leading: const Icon(
@@ -241,6 +237,7 @@ class AdminCoursesSection extends ConsumerWidget {
       String? selectedTeacherId = c.teacherId;
       final subjectController = TextEditingController(text: c.subjectName);
       bool isElective = c.isElective;
+      bool isSubmitting = false;
 
       if (context.mounted) {
         showDialog(
@@ -261,7 +258,6 @@ class AdminCoursesSection extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
 
-                    // Teacher dropdown
                     DropdownButtonFormField<String>(
                       value: selectedTeacherId,
                       decoration: const InputDecoration(
@@ -281,12 +277,12 @@ class AdminCoursesSection extends ConsumerWidget {
                             ),
                           )
                           .toList(),
-                      onChanged: (val) =>
-                          setState(() => selectedTeacherId = val),
+                      onChanged: isSubmitting
+                          ? null
+                          : (val) => setState(() => selectedTeacherId = val),
                     ),
                     const SizedBox(height: 12),
 
-                    // Elective toggle
                     Row(
                       children: [
                         const Text(
@@ -296,13 +292,14 @@ class AdminCoursesSection extends ConsumerWidget {
                         const Spacer(),
                         Switch(
                           value: isElective,
-                          onChanged: (val) => setState(() => isElective = val),
+                          onChanged: isSubmitting
+                              ? null
+                              : (val) => setState(() => isElective = val),
                           activeColor: AppColors.primary,
                         ),
                       ],
                     ),
 
-                    // Info — program and term cannot change
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -334,37 +331,50 @@ class AdminCoursesSection extends ConsumerWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      await service.editCourse(
-                        courseId: c.id,
-                        subjectName: subjectController.text.trim(),
-                        teacherId: selectedTeacherId,
-                        isElective: isElective,
-                      );
-                      ref.invalidate(adminCoursesProvider);
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Course updated'),
-                            backgroundColor: AppColors.success,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setState(() => isSubmitting = true);
+                          try {
+                            await service.editCourse(
+                              courseId: c.id,
+                              subjectName: subjectController.text.trim(),
+                              teacherId: selectedTeacherId,
+                              isElective: isElective,
+                            );
+                            ref.invalidate(adminCoursesProvider);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Course updated'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setState(() => isSubmitting = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(e.toString())));
-                      }
-                    }
-                  },
-                  child: const Text('Save'),
+                        )
+                      : const Text('Save'),
                 ),
               ],
             ),
@@ -403,6 +413,10 @@ class AdminCoursesSection extends ConsumerWidget {
       final notEnrolled = (status['notEnrolled'] as List)
           .cast<Map<String, dynamic>>();
 
+      // Tracks which student IDs currently have an enroll request in flight —
+      // prevents double-tapping the same row while its request is pending.
+      final enrollingIds = <String>{};
+
       if (context.mounted) {
         showDialog(
           context: context,
@@ -427,7 +441,6 @@ class AdminCoursesSection extends ConsumerWidget {
                       Expanded(
                         child: TabBarView(
                           children: [
-                            // Enrolled tab
                             enrolled.isEmpty
                                 ? const Center(
                                     child: Text(
@@ -460,7 +473,6 @@ class AdminCoursesSection extends ConsumerWidget {
                                     },
                                   ),
 
-                            // Not enrolled tab
                             notEnrolled.isEmpty
                                 ? const Center(
                                     child: Text(
@@ -474,6 +486,12 @@ class AdminCoursesSection extends ConsumerWidget {
                                     itemCount: notEnrolled.length,
                                     itemBuilder: (context, i) {
                                       final s = notEnrolled[i];
+                                      final studentId = s['studentId']
+                                          .toString();
+                                      final isEnrolling = enrollingIds.contains(
+                                        studentId,
+                                      );
+
                                       return ListTile(
                                         dense: true,
                                         leading: const Icon(
@@ -489,44 +507,74 @@ class AdminCoursesSection extends ConsumerWidget {
                                           s['rollNumber'] ?? '',
                                           style: const TextStyle(fontSize: 11),
                                         ),
-                                        trailing: TextButton(
-                                          onPressed: () async {
-                                            try {
-                                              await service.manualEnroll(
-                                                studentId: s['studentId']
-                                                    .toString(),
-                                                courseId: c.id,
-                                              );
-                                              setState(() {
-                                                notEnrolled.removeAt(i);
-                                                enrolled.add(s);
-                                              });
-                                              if (context.mounted) {
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      '${s['name']} enrolled',
-                                                    ),
-                                                    backgroundColor:
-                                                        AppColors.success,
+                                        trailing: SizedBox(
+                                          width: 64,
+                                          child: isEnrolling
+                                              ? const Center(
+                                                  child: SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
                                                   ),
-                                                );
-                                              }
-                                            } catch (e) {
-                                              if (context.mounted) {
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(e.toString()),
-                                                  ),
-                                                );
-                                              }
-                                            }
-                                          },
-                                          child: const Text('Enroll'),
+                                                )
+                                              : TextButton(
+                                                  onPressed: () async {
+                                                    setState(
+                                                      () => enrollingIds.add(
+                                                        studentId,
+                                                      ),
+                                                    );
+                                                    try {
+                                                      await service
+                                                          .manualEnroll(
+                                                            studentId:
+                                                                studentId,
+                                                            courseId: c.id,
+                                                          );
+                                                      setState(() {
+                                                        enrollingIds.remove(
+                                                          studentId,
+                                                        );
+                                                        notEnrolled.removeAt(i);
+                                                        enrolled.add(s);
+                                                      });
+                                                      if (context.mounted) {
+                                                        ScaffoldMessenger.of(
+                                                          context,
+                                                        ).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text(
+                                                              '${s['name']} enrolled',
+                                                            ),
+                                                            backgroundColor:
+                                                                AppColors
+                                                                    .success,
+                                                          ),
+                                                        );
+                                                      }
+                                                    } catch (e) {
+                                                      setState(
+                                                        () => enrollingIds
+                                                            .remove(studentId),
+                                                      );
+                                                      if (context.mounted) {
+                                                        ScaffoldMessenger.of(
+                                                          context,
+                                                        ).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text(
+                                                              e.toString(),
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }
+                                                    }
+                                                  },
+                                                  child: const Text('Enroll'),
+                                                ),
                                         ),
                                       );
                                     },
@@ -592,6 +640,9 @@ class AdminCoursesSection extends ConsumerWidget {
     );
     if (confirm != true) return;
 
+    // This confirm dialog already prevents accidental double-taps (it closes
+    // immediately on tap), and deactivation is a single quick call — no
+    // separate loading state needed beyond the standard try/catch below.
     try {
       await ref.read(adminServiceProvider).deactivateCourse(c.id);
       ref.invalidate(adminCoursesProvider);
@@ -645,6 +696,7 @@ class AdminCoursesSection extends ConsumerWidget {
       final subjectController = TextEditingController();
       final termController = TextEditingController(text: '1');
       bool isElective = false;
+      bool isSubmitting = false;
 
       if (context.mounted) {
         showDialog(
@@ -660,7 +712,6 @@ class AdminCoursesSection extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Program dropdown
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(
                           labelText: 'Program',
@@ -680,21 +731,22 @@ class AdminCoursesSection extends ConsumerWidget {
                               ),
                             )
                             .toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            final program = programs.firstWhere(
-                              (p) => p.id == val,
-                            );
-                            setState(() {
-                              selectedProgramId = val;
-                              selectedTotalTerms = program.totalTerms;
-                            });
-                          }
-                        },
+                        onChanged: isSubmitting
+                            ? null
+                            : (val) {
+                                if (val != null) {
+                                  final program = programs.firstWhere(
+                                    (p) => p.id == val,
+                                  );
+                                  setState(() {
+                                    selectedProgramId = val;
+                                    selectedTotalTerms = program.totalTerms;
+                                  });
+                                }
+                              },
                       ),
                       const SizedBox(height: 12),
 
-                      // Teacher dropdown
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(
                           labelText: 'Teacher',
@@ -714,14 +766,16 @@ class AdminCoursesSection extends ConsumerWidget {
                               ),
                             )
                             .toList(),
-                        onChanged: (val) =>
-                            setState(() => selectedTeacherId = val),
+                        onChanged: isSubmitting
+                            ? null
+                            : (val) => setState(() => selectedTeacherId = val),
                       ),
                       const SizedBox(height: 12),
 
-                      // Subject name
                       TextField(
                         controller: subjectController,
+                        enabled: !isSubmitting,
+                        onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(
                           labelText: 'Subject Name',
                           isDense: true,
@@ -729,9 +783,9 @@ class AdminCoursesSection extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
 
-                      // Term
                       TextField(
                         controller: termController,
+                        enabled: !isSubmitting,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: selectedTotalTerms != null
@@ -742,7 +796,6 @@ class AdminCoursesSection extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
 
-                      // Elective toggle
                       Row(
                         children: [
                           const Text(
@@ -752,8 +805,9 @@ class AdminCoursesSection extends ConsumerWidget {
                           const Spacer(),
                           Switch(
                             value: isElective,
-                            onChanged: (val) =>
-                                setState(() => isElective = val),
+                            onChanged: isSubmitting
+                                ? null
+                                : (val) => setState(() => isElective = val),
                             activeColor: AppColors.primary,
                           ),
                         ],
@@ -764,16 +818,18 @@ class AdminCoursesSection extends ConsumerWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
                   onPressed:
-                      selectedProgramId == null ||
+                      isSubmitting ||
+                          selectedProgramId == null ||
                           selectedTeacherId == null ||
                           subjectController.text.isEmpty
                       ? null
                       : () async {
+                          setState(() => isSubmitting = true);
                           try {
                             await service.createCourse(
                               programId: selectedProgramId!,
@@ -793,6 +849,7 @@ class AdminCoursesSection extends ConsumerWidget {
                               );
                             }
                           } catch (e) {
+                            setState(() => isSubmitting = false);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text(e.toString())),
@@ -800,7 +857,16 @@ class AdminCoursesSection extends ConsumerWidget {
                             }
                           }
                         },
-                  child: const Text('Create'),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Create'),
                 ),
               ],
             ),
