@@ -70,6 +70,7 @@ class AdminStudentsSection extends ConsumerWidget {
       String? selectedBatchId;
       List<BatchModel> batches = [];
       bool loadingBatches = false;
+      bool isSubmitting = false;
 
       final nameController = TextEditingController();
       final emailController = TextEditingController();
@@ -211,15 +212,17 @@ class AdminStudentsSection extends ConsumerWidget {
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  // Only enable when all required fields are filled
+                  // Only enable when all required fields are filled AND not currently submitting
                   onPressed:
-                      nameController.text.isEmpty ||
+                      isSubmitting ||
+                          nameController.text.isEmpty ||
                           emailController.text.isEmpty ||
                           rollController.text.isEmpty ||
                           selectedProgramId == null ||
                           selectedBatchId == null
                       ? null
                       : () async {
+                          setState(() => isSubmitting = true);
                           try {
                             await service.createStudent(
                               name: nameController.text.trim(),
@@ -239,6 +242,7 @@ class AdminStudentsSection extends ConsumerWidget {
                               );
                             }
                           } catch (e) {
+                            setState(() => isSubmitting = false);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text(e.toString())),
@@ -246,7 +250,16 @@ class AdminStudentsSection extends ConsumerWidget {
                             }
                           }
                         },
-                  child: const Text('Add'),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Add'),
                 ),
               ],
             ),
