@@ -1,3 +1,4 @@
+import 'package:client/shared/widgets/course_picker_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
@@ -209,43 +210,12 @@ class _AdminAttendanceOverrideScreenState
                 // Course picker — searchable, grouped by Program > Term
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: InkWell(
-                    onTap: () async {
-                      final picked = await showModalBottomSheet<CourseModel>(
-                        context: context,
-                        isScrollControlled: true,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(16),
-                          ),
-                        ),
-                        builder: (_) => _CoursePickerSheet(courses: _courses),
-                      );
-                      if (picked != null) _onCourseSelected(picked);
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Course',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                        suffixIcon: Icon(Icons.arrow_drop_down),
-                      ),
-                      child: Text(
-                        _selectedCourse == null
-                            ? 'Tap to select a course'
-                            : '${_selectedCourse!.subjectName} — ${_selectedCourse!.programName} · Term ${_selectedCourse!.term}',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: _selectedCourse == null
-                              ? AppColors.textMuted
-                              : AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
+                  child: CoursePickerField(
+                    courses: _courses,
+                    selected: _selectedCourse,
+                    onSelected: _onCourseSelected,
                   ),
                 ),
-
                 // Date dropdown — only shows once a course is picked
                 if (_selectedCourse != null)
                   Padding(
@@ -370,139 +340,6 @@ class _AdminAttendanceOverrideScreenState
                   ),
               ],
             ),
-    );
-  }
-}
-
-class _CoursePickerSheet extends StatefulWidget {
-  final List<CourseModel> courses;
-  const _CoursePickerSheet({required this.courses});
-
-  @override
-  State<_CoursePickerSheet> createState() => _CoursePickerSheetState();
-}
-
-class _CoursePickerSheetState extends State<_CoursePickerSheet> {
-  String _query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    // Filter by search query first
-    final filtered = _query.isEmpty
-        ? widget.courses
-        : widget.courses.where((c) {
-            final q = _query.toLowerCase();
-            return c.subjectName.toLowerCase().contains(q) ||
-                c.programName.toLowerCase().contains(q) ||
-                c.teacherName.toLowerCase().contains(q);
-          }).toList();
-
-    // Group by Program → Term
-    final Map<String, Map<int, List<CourseModel>>> grouped = {};
-    for (final course in filtered) {
-      grouped.putIfAbsent(course.programName, () => {});
-      grouped[course.programName]!.putIfAbsent(course.term, () => []);
-      grouped[course.programName]![course.term]!.add(course);
-    }
-    final programs = grouped.keys.toList()..sort();
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      minChildSize: 0.5,
-      maxChildSize: 0.9,
-      expand: false,
-      builder: (context, scrollController) => Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Search by subject, program, or teacher',
-                prefixIcon: Icon(Icons.search, size: 20),
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (val) => setState(() => _query = val),
-            ),
-          ),
-          Expanded(
-            child: programs.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No courses match your search',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: programs.length,
-                    itemBuilder: (context, programIndex) {
-                      final programName = programs[programIndex];
-                      final termMap = grouped[programName]!;
-                      final terms = termMap.keys.toList()..sort();
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12, bottom: 4),
-                            child: Text(
-                              programName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ),
-                          ...terms.map((term) {
-                            final termCourses = termMap[term]!;
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 4,
-                                    bottom: 2,
-                                  ),
-                                  child: Text(
-                                    'Term $term',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ),
-                                ...termCourses.map(
-                                  (course) => ListTile(
-                                    dense: true,
-                                    contentPadding: const EdgeInsets.only(
-                                      left: 8,
-                                    ),
-                                    title: Text(
-                                      course.subjectName,
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                    subtitle: Text(
-                                      course.teacherName,
-                                      style: const TextStyle(fontSize: 11),
-                                    ),
-                                    onTap: () => Navigator.pop(context, course),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }),
-                        ],
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
     );
   }
 }
