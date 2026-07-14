@@ -3,8 +3,6 @@ const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
 const { upload } = require('../utils/upload'); 
 const {
-  overrideAttendance,
-  overrideMarksheet,
   uploadFinalResults,
   getEvaluationConfig,
   updateEvaluationConfig,
@@ -14,8 +12,6 @@ const {
 router.use(protect);
 router.use(authorize('admin'));
 
-router.patch('/attendance/:id', overrideAttendance);
-router.patch('/marksheets/:id', overrideMarksheet);
 router.post('/final-results', upload.single('file'), uploadFinalResults);
 router.get('/evaluation-config', getEvaluationConfig);
 router.patch('/evaluation-config', updateEvaluationConfig);

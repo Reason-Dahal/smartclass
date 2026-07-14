@@ -870,77 +870,7 @@ const resetUserPassword = async (req, res) => {
 };
 
 //ACADEMIC OVERRIDES 
-
-const overrideAttendance = async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    if (!['present', 'absent', 'late'].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Status must be present, absent or late',
-        },
-      });
-    }
-
-    const record = await Attendance.findById(req.params.id);
-    if (!record) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Attendance record not found' },
-      });
-    }
-
-    record.status = status;
-    record.markedBy = req.user._id;
-    await record.save();
-
-    res.status(200).json({
-      success: true,
-      data: { message: 'Attendance overridden successfully', record },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: { code: 'SERVER_ERROR', message: error.message },
-    });
-  }
-};
-
-const overrideMarksheet = async (req, res) => {
-  try {
-    const { internalExamMarks, internalExamTotalMarks, teacherEvaluationScore } = req.body;
-
-    const marksheet = await Marksheet.findById(req.params.id);
-    if (!marksheet) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Marksheet not found' },
-      });
-    }
-
-    if (internalExamMarks !== undefined) marksheet.internalExamMarks = internalExamMarks;
-    if (internalExamTotalMarks !== undefined) marksheet.internalExamTotalMarks = internalExamTotalMarks;
-    if (teacherEvaluationScore !== undefined) marksheet.teacherEvaluationScore = teacherEvaluationScore;
-    marksheet.uploadedBy = req.user._id;
-
-    await marksheet.save();
-
-    res.status(200).json({
-      success: true,
-      data: { message: 'Marksheet overridden successfully', marksheet },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: { code: 'SERVER_ERROR', message: error.message },
-    });
-  }
-};
-
-//  ADMIN  ATTENDANCE OVERRIDE 
+//ADMIN  ATTENDANCE OVERRIDE 
 
 // Validates a date string is well-formed before it ever reaches MongoDB
 const isValidDateString = (value) => {
@@ -1620,8 +1550,6 @@ module.exports = {
   manualEnroll,
   getCourseEnrollmentStatus, 
   getAdminCourseStudents,
-  overrideAttendance,
-  overrideMarksheet,
   getAdminAttendanceDates,
   getAdminAttendanceForDate,
   adminEditAttendance,

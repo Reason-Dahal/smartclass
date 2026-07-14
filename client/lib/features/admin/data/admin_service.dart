@@ -673,52 +673,6 @@ class AdminService {
     }
   }
   // OVERRIDE DATA
-
-  Future<void> overrideAttendance({
-    required String attendanceId,
-    required String status,
-  }) async {
-    try {
-      await _dio.patch(
-        '/admin/attendance/$attendanceId',
-        data: {'status': status},
-      );
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw ApiException.fromResponse(
-          e.response!.data,
-          e.response!.statusCode,
-        );
-      }
-      throw ApiException.networkError();
-    }
-  }
-
-  Future<void> overrideMarksheet({
-    required String marksheetId,
-    required double internalExamMarks,
-    required double internalExamTotalMarks,
-    required double teacherEvaluationScore,
-  }) async {
-    try {
-      await _dio.patch(
-        '/admin/marksheets/$marksheetId',
-        data: {
-          'internalExamMarks': internalExamMarks,
-          'internalExamTotalMarks': internalExamTotalMarks,
-          'teacherEvaluationScore': teacherEvaluationScore,
-        },
-      );
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw ApiException.fromResponse(
-          e.response!.data,
-          e.response!.statusCode,
-        );
-      }
-      throw ApiException.networkError();
-    }
-  }
   //  ATTENDANCE OVERRIDE
 
   Future<List<DateTime>> getAdminAttendanceDates(String courseId) async {
