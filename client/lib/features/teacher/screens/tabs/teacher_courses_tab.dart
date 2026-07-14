@@ -283,6 +283,7 @@ class TeacherCoursesTab extends ConsumerWidget {
       final dateController = TextEditingController(
         text: DateTime.now().toIso8601String().split('T')[0],
       );
+      bool isSubmitting = false;
 
       if (context.mounted) {
         showDialog(
@@ -409,38 +410,55 @@ class TeacherCoursesTab extends ConsumerWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    final records = attendanceMap.entries
-                        .map((e) => {'studentId': e.key, 'status': e.value})
-                        .toList();
-                    try {
-                      await service.takeAttendance(
-                        course.id,
-                        dateController.text,
-                        records,
-                      );
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Attendance saved successfully'),
-                            backgroundColor: AppColors.success,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setState(() => isSubmitting = true);
+                          final records = attendanceMap.entries
+                              .map(
+                                (e) => {'studentId': e.key, 'status': e.value},
+                              )
+                              .toList();
+                          try {
+                            await service.takeAttendance(
+                              course.id,
+                              dateController.text,
+                              records,
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Attendance saved successfully',
+                                  ),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setState(() => isSubmitting = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(e.toString())));
-                      }
-                    }
-                  },
-                  child: const Text('Save attendance'),
+                        )
+                      : const Text('Save attendance'),
                 ),
               ],
             ),
@@ -466,6 +484,7 @@ class TeacherCoursesTab extends ConsumerWidget {
     final descController = TextEditingController();
     DateTime? dueDate;
     bool showTitleError = false;
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
@@ -499,19 +518,23 @@ class TeacherCoursesTab extends ConsumerWidget {
                   ),
                   const Spacer(),
                   TextButton(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: ctx,
-                        initialDate: DateTime.now().add(
-                          const Duration(days: 7),
-                        ),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (picked != null) {
-                        setState(() => dueDate = picked);
-                      }
-                    },
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            final picked = await showDatePicker(
+                              context: ctx,
+                              initialDate: DateTime.now().add(
+                                const Duration(days: 7),
+                              ),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(
+                                const Duration(days: 365),
+                              ),
+                            );
+                            if (picked != null) {
+                              setState(() => dueDate = picked);
+                            }
+                          },
                     child: const Text('Pick date'),
                   ),
                 ],
@@ -520,32 +543,56 @@ class TeacherCoursesTab extends ConsumerWidget {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty) {
-                  setState(() => showTitleError = true);
-                  return;
-                }
-                if (dueDate == null) return;
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (titleController.text.trim().isEmpty) {
+                        setState(() => showTitleError = true);
+                        return;
+                      }
+                      if (dueDate == null) return;
 
-                final service = ref.read(teacherServiceProvider);
-                await service.createAssignment(
-                  course.id,
-                  title: titleController.text.trim(),
-                  description: descController.text,
-                  dueDate: dueDate!.toIso8601String(),
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Assignment created')),
-                  );
-                }
-              },
-              child: const Text('Create'),
+                      setState(() => isSubmitting = true);
+                      try {
+                        final service = ref.read(teacherServiceProvider);
+                        await service.createAssignment(
+                          course.id,
+                          title: titleController.text.trim(),
+                          description: descController.text,
+                          dueDate: dueDate!.toIso8601String(),
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Assignment created'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setState(() => isSubmitting = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Create'),
             ),
           ],
         ),
@@ -560,7 +607,8 @@ class TeacherCoursesTab extends ConsumerWidget {
   ) {
     final titleController = TextEditingController();
     String? selectedFileUrl;
-    bool isUploading = false;
+    bool isUploading = false; // file-picking state
+    bool isSubmitting = false; // save-to-server state
     bool showTitleError = false;
 
     showDialog(
@@ -638,7 +686,9 @@ class TeacherCoursesTab extends ConsumerWidget {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () => setState(() => selectedFileUrl = null),
+                        onTap: isSubmitting
+                            ? null
+                            : () => setState(() => selectedFileUrl = null),
                         child: const Icon(
                           Icons.close,
                           size: 16,
@@ -652,11 +702,11 @@ class TeacherCoursesTab extends ConsumerWidget {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: selectedFileUrl == null
+              onPressed: selectedFileUrl == null || isSubmitting
                   ? null
                   : () async {
                       if (titleController.text.trim().isEmpty) {
@@ -664,6 +714,7 @@ class TeacherCoursesTab extends ConsumerWidget {
                         return;
                       }
 
+                      setState(() => isSubmitting = true);
                       try {
                         final service = ref.read(teacherServiceProvider);
                         await service.uploadNote(
@@ -674,10 +725,14 @@ class TeacherCoursesTab extends ConsumerWidget {
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Note uploaded')),
+                            const SnackBar(
+                              content: Text('Note uploaded'),
+                              backgroundColor: AppColors.success,
+                            ),
                           );
                         }
                       } catch (e) {
+                        setState(() => isSubmitting = false);
                         if (context.mounted) {
                           ScaffoldMessenger.of(
                             context,
@@ -685,7 +740,16 @@ class TeacherCoursesTab extends ConsumerWidget {
                         }
                       }
                     },
-              child: const Text('Upload'),
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Upload'),
             ),
           ],
         ),
@@ -758,7 +822,7 @@ class TeacherCoursesTab extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: () async {
+                      onPressed: () {
                         Navigator.pop(ctx);
                         _showEditAttendanceForDate(
                           context,
@@ -821,6 +885,8 @@ class TeacherCoursesTab extends ConsumerWidget {
         statusMap[studentId] = r['status'] ?? 'present';
       }
 
+      bool isSubmitting = false;
+
       if (context.mounted) {
         showDialog(
           context: context,
@@ -853,8 +919,11 @@ class TeacherCoursesTab extends ConsumerWidget {
                           return Padding(
                             padding: const EdgeInsets.only(left: 4),
                             child: GestureDetector(
-                              onTap: () =>
-                                  setState(() => statusMap[studentId] = s),
+                              onTap: isSubmitting
+                                  ? null
+                                  : () => setState(
+                                      () => statusMap[studentId] = s,
+                                    ),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
@@ -887,39 +956,57 @@ class TeacherCoursesTab extends ConsumerWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      final recordsList = statusMap.entries
-                          .map((e) => {'studentId': e.key, 'status': e.value})
-                          .toList();
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setState(() => isSubmitting = true);
+                          try {
+                            final recordsList = statusMap.entries
+                                .map(
+                                  (e) => {
+                                    'studentId': e.key,
+                                    'status': e.value,
+                                  },
+                                )
+                                .toList();
 
-                      await service.editAttendance(
-                        courseId: course.id,
-                        date: dateStr,
-                        records: recordsList,
-                      );
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Attendance updated'),
-                            backgroundColor: AppColors.success,
+                            await service.editAttendance(
+                              courseId: course.id,
+                              date: dateStr,
+                              records: recordsList,
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Attendance updated'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setState(() => isSubmitting = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(e.toString())));
-                      }
-                    }
-                  },
-                  child: const Text('Save'),
+                        )
+                      : const Text('Save'),
                 ),
               ],
             ),
