@@ -1,33 +1,48 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_colors.dart';
-import '../models/teacher_models.dart';
-import '../providers/teacher_providers.dart';
+import '../../core/constants/app_colors.dart';
 
-class EditMarksheetScreen extends ConsumerStatefulWidget {
-  final TeacherCourseModel course;
+/// Shared marksheet entry/edit screen, used by both teacher (own courses
+/// only) and admin (any course, override mode) via dependency injection —
+/// the screen doesn't know or care which role is using it, it just calls
+/// whatever functions it's given.
+class MarksheetEditorScreen extends StatefulWidget {
+  final String courseId;
+  final String subjectName;
+  final int courseTerm;
   final String mode; // 'create' or 'edit'
 
-  const EditMarksheetScreen({
+  final Future<List<Map<String, dynamic>>> Function(String courseId)
+  getCourseStudents;
+  final Future<List<Map<String, dynamic>>> Function(String courseId)
+  getMarksheetsByCourse;
+  final Future<void> Function(
+    String courseId, {
+    required int term,
+    required List<Map<String, dynamic>> marksheets,
+  })
+  bulkUpload;
+
+  const MarksheetEditorScreen({
     super.key,
-    required this.course,
+    required this.courseId,
+    required this.subjectName,
+    required this.courseTerm,
+    required this.getCourseStudents,
+    required this.getMarksheetsByCourse,
+    required this.bulkUpload,
     this.mode = 'edit',
   });
 
   @override
-  ConsumerState<EditMarksheetScreen> createState() =>
-      _EditMarksheetScreenState();
+  State<MarksheetEditorScreen> createState() => _MarksheetEditorScreenState();
 }
 
-class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
+class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _error;
 
-  // For edit mode — existing marksheet records
   List<Map<String, dynamic>> _marksheets = [];
-
-  // For create mode — enrolled students
   List<Map<String, dynamic>> _students = [];
 
   List<int> _terms = [];
@@ -35,14 +50,10 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
 
   final Map<String, TextEditingController> _marksControllers = {};
   final Map<String, TextEditingController> _evalControllers = {};
-
-  // Total marks is the same for every student in a given assessment —
-  // one shared controller instead of one per student, guarantees consistency.
   final TextEditingController _sharedTotalController = TextEditingController(
     text: '100',
   );
 
-  // Tracks student IDs for create mode
   final List<String> _studentIds = [];
   final List<String> _studentNames = [];
 
@@ -56,28 +67,24 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
 
   Future<void> _load() async {
     try {
-      final service = ref.read(teacherServiceProvider);
-
       if (_isCreateMode) {
-        final students = await service.getCourseStudents(widget.course.id);
+        final students = await widget.getCourseStudents(widget.courseId);
         setState(() {
           _students = students;
-          _terms = [widget.course.term];
-          _selectedTerm = widget.course.term;
+          _terms = [widget.courseTerm];
+          _selectedTerm = widget.courseTerm;
           _isLoading = false;
         });
         _buildControllersFromStudents();
       } else {
-        final marksheets = await service.getMarksheetsByCourse(
-          widget.course.id,
-        );
+        final marksheets = await widget.getMarksheetsByCourse(widget.courseId);
 
         if (marksheets.isEmpty) {
-          final students = await service.getCourseStudents(widget.course.id);
+          final students = await widget.getCourseStudents(widget.courseId);
           setState(() {
             _students = students;
-            _terms = [widget.course.term];
-            _selectedTerm = widget.course.term;
+            _terms = [widget.courseTerm];
+            _selectedTerm = widget.courseTerm;
             _isLoading = false;
           });
           _buildControllersFromStudents();
@@ -149,8 +156,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
       );
     }
 
-    // Pre-fill the shared total from the first existing marksheet, if any —
-    // since it should already be consistent across all of them
     if (termMarksheets.isNotEmpty) {
       final existingTotal = termMarksheets.first['internalExamTotalMarks'];
       if (existingTotal != null) {
@@ -177,7 +182,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
 
   Future<void> _save() async {
     setState(() => _isSaving = true);
-    final service = ref.read(teacherServiceProvider);
 
     final sharedTotal = double.tryParse(_sharedTotalController.text) ?? 0;
 
@@ -218,8 +222,8 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
         }).toList();
       }
 
-      await service.bulkUploadMarksheets(
-        widget.course.id,
+      await widget.bulkUpload(
+        widget.courseId,
         term: _selectedTerm,
         marksheets: payload,
       );
@@ -275,7 +279,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '${_isCreateMode ? 'Enter' : 'Edit'} Marksheet — ${widget.course.subjectName}',
+          '${_isCreateMode ? 'Enter' : 'Edit'} Marksheet — ${widget.subjectName}',
           style: const TextStyle(fontSize: 15),
           overflow: TextOverflow.ellipsis,
         ),
@@ -312,7 +316,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
           ? const Center(child: Text('No students enrolled in this course'))
           : Column(
               children: [
-                // Term selector — only in edit mode
                 if (!_isCreateMode && _terms.length > 1)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -340,7 +343,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                     ),
                   ),
 
-                // Term display — in create mode
                 if (_isCreateMode)
                   Container(
                     width: double.infinity,
@@ -350,7 +352,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                     ),
                     color: AppColors.infoLight,
                     child: Text(
-                      'Term $_selectedTerm — ${widget.course.subjectName}',
+                      'Term $_selectedTerm — ${widget.subjectName}',
                       style: const TextStyle(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w600,
@@ -358,13 +360,12 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                     ),
                   ),
 
-                // Shared Total Marks field — applies to every student below
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: TextField(
                     controller: _sharedTotalController,
                     keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}), // refresh table display
+                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: 'Total Marks (applies to all students)',
                       helperText:
@@ -376,7 +377,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                   ),
                 ),
 
-                // Table header
                 Container(
                   color: AppColors.primaryDark,
                   padding: const EdgeInsets.symmetric(
@@ -433,7 +433,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                   ),
                 ),
 
-                // Student rows
                 Expanded(
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -477,7 +476,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                               ),
                             ),
                             const SizedBox(width: 4),
-                            // Total — read-only, mirrors the shared field above
                             Expanded(
                               child: Container(
                                 height: 40,

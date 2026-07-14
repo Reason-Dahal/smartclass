@@ -13,6 +13,7 @@ const {
   resetUserPassword,
   manualEnroll,
   getCourseEnrollmentStatus,
+  getAdminCourseStudents,
   getAdminAttendanceDates,
   getAdminAttendanceForDate,
   adminEditAttendance,
@@ -49,12 +50,13 @@ router.patch('/users/reset-password', resetUserPassword);
 router.post('/enroll', manualEnroll);
 router.get('/courses/:courseId/enrollment-status', getCourseEnrollmentStatus);
 
-// Attendance override (full access — no ownership restriction)
+// Attendance override 
 router.get('/courses/:courseId/attendance-dates',   getAdminAttendanceDates);
 router.get('/courses/:courseId/attendance/:date',   getAdminAttendanceForDate);
+router.get('/courses/:courseId/students', getAdminCourseStudents);
 router.patch('/courses/:courseId/attendance/:date', adminEditAttendance);
 
-// Marksheet override (full access — no ownership restriction)
+// Marksheet override 
 router.get('/courses/:courseId/marksheets',       getAdminMarksheetsByCourse);
 router.post('/courses/:courseId/marksheets/bulk', adminBulkUploadMarksheets);
 

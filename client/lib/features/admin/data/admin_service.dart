@@ -573,6 +573,24 @@ class AdminService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getCourseStudents(String courseId) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.courseEnrollmentStatus}/$courseId/students',
+      );
+      final students = response.data['data']['students'] as List;
+      return students.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
   Future<Map<String, dynamic>> getCourseEnrollmentStatus(
     String courseId,
   ) async {

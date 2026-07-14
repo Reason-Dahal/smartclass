@@ -1,4 +1,4 @@
-import 'package:client/features/teacher/screens/edit_marksheet_screen.dart';
+import 'package:client/shared/screens/marksheet_editor_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -596,7 +596,16 @@ class TeacherGradingTab extends ConsumerWidget {
   ) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => EditMarksheetScreen(course: course, mode: 'create'),
+        builder: (_) => MarksheetEditorScreen(
+          courseId: course.id,
+          subjectName: course.subjectName,
+          courseTerm: course.term,
+          getCourseStudents: ref.read(teacherServiceProvider).getCourseStudents,
+          getMarksheetsByCourse: ref
+              .read(teacherServiceProvider)
+              .getMarksheetsByCourse,
+          bulkUpload: ref.read(teacherServiceProvider).bulkUploadMarksheets,
+        ),
       ),
     );
   }

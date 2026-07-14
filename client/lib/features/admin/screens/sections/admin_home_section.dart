@@ -1,4 +1,8 @@
+import 'package:client/features/admin/models/admin_models.dart';
 import 'package:client/features/admin/screens/admin_attendance_override_screen.dart';
+import 'package:client/features/admin/screens/admin_marksheet_override_screen.dart';
+import 'package:client/shared/screens/marksheet_editor_screen.dart';
+import 'package:client/shared/widgets/course_picker_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -593,7 +597,11 @@ class AdminHomeSection extends ConsumerWidget {
               ),
               onTap: () {
                 Navigator.pop(context);
-                _showOverrideMarksheet(context, ref);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AdminMarksheetOverrideScreen(),
+                  ),
+                );
               },
             ),
           ],

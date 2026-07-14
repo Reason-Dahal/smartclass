@@ -940,7 +940,7 @@ const overrideMarksheet = async (req, res) => {
   }
 };
 
-// ─── ADMIN — ATTENDANCE OVERRIDE (full access, no ownership restriction) ─
+//  ADMIN  ATTENDANCE OVERRIDE 
 
 // Validates a date string is well-formed before it ever reaches MongoDB
 const isValidDateString = (value) => {
@@ -953,6 +953,46 @@ const isValidDateString = (value) => {
 const isValidTerm = (value) => {
   const num = Number(value);
   return Number.isInteger(num) && num >= 1 && num <= 12;
+};
+
+const getAdminCourseStudents = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    const enrollments = await Enrollment.find({
+      courseId,
+      isActive: true,
+    }).populate({
+      path: 'studentId',
+      select: 'rollNumber userId',
+      populate: { path: 'userId', select: 'name email' },
+    });
+
+    const students = enrollments.map((e) => ({
+      studentId: e.studentId._id,
+      rollNumber: e.studentId.rollNumber,
+      name: e.studentId.userId?.name || '',
+      email: e.studentId.userId?.email || '',
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: { students },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
 };
 
 const getAdminAttendanceDates = async (req, res) => {
@@ -1579,7 +1619,9 @@ module.exports = {
   createBatch, getBatches, getAllBatches, promoteBatch,
   manualEnroll,
   getCourseEnrollmentStatus, 
-  overrideAttendance, overrideMarksheet,
+  getAdminCourseStudents,
+  overrideAttendance,
+  overrideMarksheet,
   getAdminAttendanceDates,
   getAdminAttendanceForDate,
   adminEditAttendance,
