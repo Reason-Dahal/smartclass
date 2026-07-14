@@ -34,8 +34,13 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
   int _selectedTerm = 1;
 
   final Map<String, TextEditingController> _marksControllers = {};
-  final Map<String, TextEditingController> _totalControllers = {};
   final Map<String, TextEditingController> _evalControllers = {};
+
+  // Total marks is the same for every student in a given assessment —
+  // one shared controller instead of one per student, guarantees consistency.
+  final TextEditingController _sharedTotalController = TextEditingController(
+    text: '100',
+  );
 
   // Tracks student IDs for create mode
   final List<String> _studentIds = [];
@@ -54,7 +59,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
       final service = ref.read(teacherServiceProvider);
 
       if (_isCreateMode) {
-        // Create mode — load enrolled students
         final students = await service.getCourseStudents(widget.course.id);
         setState(() {
           _students = students;
@@ -64,13 +68,11 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
         });
         _buildControllersFromStudents();
       } else {
-        // Edit mode — load existing marksheets
         final marksheets = await service.getMarksheetsByCourse(
           widget.course.id,
         );
 
         if (marksheets.isEmpty) {
-          // No marksheets yet — switch to create mode automatically
           final students = await service.getCourseStudents(widget.course.id);
           setState(() {
             _students = students;
@@ -101,7 +103,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
     }
   }
 
-  // Build controllers from enrolled students (empty fields)
   void _buildControllersFromStudents() {
     _disposeControllers();
     _studentIds.clear();
@@ -114,13 +115,11 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
       _studentIds.add(id);
       _studentNames.add(name);
       _marksControllers[id] = TextEditingController();
-      _totalControllers[id] = TextEditingController();
       _evalControllers[id] = TextEditingController();
     }
     setState(() {});
   }
 
-  // Build controllers from existing marksheets (pre-filled)
   void _buildControllersFromMarksheets() {
     _disposeControllers();
     _studentIds.clear();
@@ -145,28 +144,34 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
       _marksControllers[id] = TextEditingController(
         text: m['internalExamMarks']?.toString() ?? '',
       );
-      _totalControllers[id] = TextEditingController(
-        text: m['internalExamTotalMarks']?.toString() ?? '',
-      );
       _evalControllers[id] = TextEditingController(
         text: m['teacherEvaluationScore']?.toString() ?? '',
       );
     }
+
+    // Pre-fill the shared total from the first existing marksheet, if any —
+    // since it should already be consistent across all of them
+    if (termMarksheets.isNotEmpty) {
+      final existingTotal = termMarksheets.first['internalExamTotalMarks'];
+      if (existingTotal != null) {
+        _sharedTotalController.text = existingTotal.toString();
+      }
+    }
+
     setState(() {});
   }
 
   void _disposeControllers() {
     for (final c in _marksControllers.values) c.dispose();
-    for (final c in _totalControllers.values) c.dispose();
     for (final c in _evalControllers.values) c.dispose();
     _marksControllers.clear();
-    _totalControllers.clear();
     _evalControllers.clear();
   }
 
   @override
   void dispose() {
     _disposeControllers();
+    _sharedTotalController.dispose();
     super.dispose();
   }
 
@@ -174,25 +179,23 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
     setState(() => _isSaving = true);
     final service = ref.read(teacherServiceProvider);
 
+    final sharedTotal = double.tryParse(_sharedTotalController.text) ?? 0;
+
     try {
-      // Build the marksheets payload — one entry per student, regardless of mode.
       final List<Map<String, dynamic>> payload;
 
       if (_isCreateMode || _marksheets.isEmpty) {
-        // Create mode — controllers keyed by student ID directly
         payload = _studentIds.map((studentId) {
           return {
             'studentId': studentId,
             'internalExamMarks':
                 double.tryParse(_marksControllers[studentId]?.text ?? '0') ?? 0,
-            'internalExamTotalMarks':
-                double.tryParse(_totalControllers[studentId]?.text ?? '0') ?? 0,
+            'internalExamTotalMarks': sharedTotal,
             'teacherEvaluationScore':
                 double.tryParse(_evalControllers[studentId]?.text ?? '0') ?? 0,
           };
         }).toList();
       } else {
-        // Edit mode — controllers keyed by marksheet ID
         final termMarksheets = _marksheets
             .where((m) => m['term'] == _selectedTerm)
             .toList();
@@ -208,16 +211,13 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
             'studentId': studentId,
             'internalExamMarks':
                 double.tryParse(_marksControllers[id]?.text ?? '0') ?? 0,
-            'internalExamTotalMarks':
-                double.tryParse(_totalControllers[id]?.text ?? '0') ?? 0,
+            'internalExamTotalMarks': sharedTotal,
             'teacherEvaluationScore':
                 double.tryParse(_evalControllers[id]?.text ?? '0') ?? 0,
           };
         }).toList();
       }
 
-      // Single request — backend wraps this in a transaction.
-      // Either every student in this batch saves, or none do.
       await service.bulkUploadMarksheets(
         widget.course.id,
         term: _selectedTerm,
@@ -246,8 +246,6 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
     }
   }
 
-  // Keys for create mode — student IDs are used directly
-  // Keys for edit mode — marksheet IDs are used
   List<String> get _keys {
     if (_isCreateMode || _marksheets.isEmpty) return _studentIds;
     return _marksheets
@@ -317,7 +315,7 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                 // Term selector — only in edit mode
                 if (!_isCreateMode && _terms.length > 1)
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: DropdownButtonFormField<int>(
                       value: _selectedTerm,
                       decoration: const InputDecoration(
@@ -359,6 +357,24 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                       ),
                     ),
                   ),
+
+                // Shared Total Marks field — applies to every student below
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: TextField(
+                    controller: _sharedTotalController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}), // refresh table display
+                    decoration: const InputDecoration(
+                      labelText: 'Total Marks (applies to all students)',
+                      helperText:
+                          'Set once — every student below shares this total',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.rule, size: 18),
+                    ),
+                  ),
+                ),
 
                 // Table header
                 Container(
@@ -461,19 +477,26 @@ class _EditMarksheetScreenState extends ConsumerState<EditMarksheetScreen> {
                               ),
                             ),
                             const SizedBox(width: 4),
+                            // Total — read-only, mirrors the shared field above
                             Expanded(
-                              child: TextField(
-                                controller: _totalControllers[key],
-                                textAlign: TextAlign.center,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 8,
+                              child: Container(
+                                height: 40,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceSecondary,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: AppColors.borderLight,
                                   ),
-                                  border: OutlineInputBorder(),
-                                  hintText: '0',
+                                ),
+                                child: Text(
+                                  _sharedTotalController.text.isEmpty
+                                      ? '0'
+                                      : _sharedTotalController.text,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ),
                             ),
