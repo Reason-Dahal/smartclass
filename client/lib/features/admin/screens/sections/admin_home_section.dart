@@ -256,14 +256,16 @@ class AdminHomeSection extends ConsumerWidget {
                             ),
                           )
                           .toList(),
-                      onChanged: (val) =>
-                          setState(() => selectedProgramId = val),
+                      onChanged: isUploading
+                          ? null
+                          : (val) => setState(() => selectedProgramId = val),
                     ),
                     const SizedBox(height: 12),
 
                     // Term
                     TextField(
                       controller: termController,
+                      enabled: !isUploading,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: 'Term / Year Number',
@@ -280,24 +282,27 @@ class AdminHomeSection extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 13),
                       ),
-                      onPressed: () async {
-                        final result = await FilePicker.platform.pickFiles(
-                          type: FileType.custom,
-                          allowedExtensions: ['pdf', 'docx', 'doc'],
-                          withData: true,
-                        );
-                        if (result != null && result.files.isNotEmpty) {
-                          final file = result.files.first;
-                          final mime = file.name.endsWith('.pdf')
-                              ? 'pdf'
-                              : 'docx';
-                          setState(() {
-                            selectedFileName = file.name;
-                            selectedFileBytes = file.bytes;
-                            selectedFileType = mime;
-                          });
-                        }
-                      },
+                      onPressed: isUploading
+                          ? null
+                          : () async {
+                              final result = await FilePicker.platform
+                                  .pickFiles(
+                                    type: FileType.custom,
+                                    allowedExtensions: ['pdf', 'docx', 'doc'],
+                                    withData: true,
+                                  );
+                              if (result != null && result.files.isNotEmpty) {
+                                final file = result.files.first;
+                                final mime = file.name.endsWith('.pdf')
+                                    ? 'pdf'
+                                    : 'docx';
+                                setState(() {
+                                  selectedFileName = file.name;
+                                  selectedFileBytes = file.bytes;
+                                  selectedFileType = mime;
+                                });
+                              }
+                            },
                     ),
 
                     // Show selected file name
@@ -330,7 +335,7 @@ class AdminHomeSection extends ConsumerWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: isUploading ? null : () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -410,6 +415,7 @@ class AdminHomeSection extends ConsumerWidget {
       int internalExam = (config['internalExamWeight'] ?? 25).toInt();
       int assignment = (config['assignmentWeight'] ?? 25).toInt();
       int teacherEval = (config['teacherEvaluationWeight'] ?? 25).toInt();
+      bool isSubmitting = false;
 
       if (context.mounted) {
         showDialog(
@@ -463,6 +469,7 @@ class AdminHomeSection extends ConsumerWidget {
                       _WeightSlider(
                         label: 'Attendance',
                         value: attendance,
+                        enabled: !isSubmitting,
                         onChanged: (val) => setState(() => attendance = val),
                       ),
 
@@ -470,6 +477,7 @@ class AdminHomeSection extends ConsumerWidget {
                       _WeightSlider(
                         label: 'Internal Exam',
                         value: internalExam,
+                        enabled: !isSubmitting,
                         onChanged: (val) => setState(() => internalExam = val),
                       ),
 
@@ -477,6 +485,7 @@ class AdminHomeSection extends ConsumerWidget {
                       _WeightSlider(
                         label: 'Assignments',
                         value: assignment,
+                        enabled: !isSubmitting,
                         onChanged: (val) => setState(() => assignment = val),
                       ),
 
@@ -484,6 +493,7 @@ class AdminHomeSection extends ConsumerWidget {
                       _WeightSlider(
                         label: 'Teacher Eval',
                         value: teacherEval,
+                        enabled: !isSubmitting,
                         onChanged: (val) => setState(() => teacherEval = val),
                       ),
                     ],
@@ -491,13 +501,14 @@ class AdminHomeSection extends ConsumerWidget {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(ctx),
+                    onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
-                    onPressed: !isValid
+                    onPressed: !isValid || isSubmitting
                         ? null
                         : () async {
+                            setState(() => isSubmitting = true);
                             try {
                               await service.updateEvaluationConfig(
                                 attendanceWeight: attendance,
@@ -516,6 +527,7 @@ class AdminHomeSection extends ConsumerWidget {
                                 );
                               }
                             } catch (e) {
+                              setState(() => isSubmitting = false);
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text(e.toString())),
@@ -523,7 +535,16 @@ class AdminHomeSection extends ConsumerWidget {
                               }
                             }
                           },
-                    child: const Text('Save'),
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Save'),
                   ),
                 ],
               );
@@ -559,7 +580,7 @@ class AdminHomeSection extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Requires the document ID from the database',
+              'Select a course, then browse and edit records directly',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
@@ -612,11 +633,13 @@ class _WeightSlider extends StatelessWidget {
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
+  final bool enabled;
 
   const _WeightSlider({
     required this.label,
     required this.value,
     required this.onChanged,
+    this.enabled = true,
   });
 
   @override
@@ -655,7 +678,7 @@ class _WeightSlider extends StatelessWidget {
           max: 100,
           divisions: 100,
           activeColor: AppColors.primary,
-          onChanged: (val) => onChanged(val.toInt()),
+          onChanged: enabled ? (val) => onChanged(val.toInt()) : null,
         ),
         const SizedBox(height: 4),
       ],
