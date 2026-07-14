@@ -7,7 +7,7 @@ import '../models/admin_models.dart';
 class AdminService {
   final Dio _dio = DioClient.instance;
 
-  // ─── TEACHERS ────────────────────────────────────────────────────
+  // TEACHERS
 
   Future<List<AdminUserModel>> getTeachers() async {
     try {
@@ -86,7 +86,7 @@ class AdminService {
     }
   }
 
-  // ─── STUDENTS ────────────────────────────────────────────────────
+  // STUDENTS
 
   Future<List<AdminUserModel>> getStudents() async {
     try {
@@ -212,7 +212,7 @@ class AdminService {
     }
   }
 
-  // ─── PROGRAMS ────────────────────────────────────────────────────
+  // PROGRAMS
 
   Future<List<ProgramModel>> getPrograms() async {
     try {
@@ -301,7 +301,7 @@ class AdminService {
     }
   }
 
-  // ─── BATCHES ─────────────────────────────────────────────────────
+  // BATCHES
 
   Future<List<BatchModel>> getAllBatches() async {
     try {
@@ -427,7 +427,7 @@ class AdminService {
     }
   }
 
-  // ─── REPORTS ─────────────────────────────────────────────────────
+  //  REPORTS
 
   Future<SystemReportModel> getReports() async {
     try {
@@ -654,6 +654,7 @@ class AdminService {
       throw ApiException.networkError();
     }
   }
+  // OVERRIDE DATA
 
   Future<void> overrideAttendance({
     required String attendanceId,
@@ -689,6 +690,114 @@ class AdminService {
           'internalExamTotalMarks': internalExamTotalMarks,
           'teacherEvaluationScore': teacherEvaluationScore,
         },
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+  //  ATTENDANCE OVERRIDE
+
+  Future<List<DateTime>> getAdminAttendanceDates(String courseId) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.courseEnrollmentStatus}/$courseId/attendance-dates',
+      );
+      final dates = response.data['data']['dates'] as List;
+      return dates
+          .map((d) => DateTime.tryParse(d.toString()) ?? DateTime.now())
+          .toList();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAdminAttendanceForDate(
+    String courseId,
+    String date,
+  ) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.courseEnrollmentStatus}/$courseId/attendance/$date',
+      );
+      final records = response.data['data']['records'] as List;
+      return records.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> adminEditAttendance({
+    required String courseId,
+    required String date,
+    required List<Map<String, String>> records,
+  }) async {
+    try {
+      await _dio.patch(
+        '${ApiConstants.courseEnrollmentStatus}/$courseId/attendance/$date',
+        data: {'records': records},
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  //  MARKSHEET OVERRIDE
+
+  Future<List<Map<String, dynamic>>> getAdminMarksheetsByCourse(
+    String courseId, {
+    int? term,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.courseEnrollmentStatus}/$courseId/marksheets',
+        queryParameters: term != null ? {'term': term} : null,
+      );
+      final marksheets = response.data['data']['marksheets'] as List;
+      return marksheets.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> adminBulkUploadMarksheets(
+    String courseId, {
+    required int term,
+    required List<Map<String, dynamic>> marksheets,
+  }) async {
+    try {
+      await _dio.post(
+        '${ApiConstants.courseEnrollmentStatus}/$courseId/marksheets/bulk',
+        data: {'term': term, 'marksheets': marksheets},
       );
     } on DioException catch (e) {
       if (e.response != null) {

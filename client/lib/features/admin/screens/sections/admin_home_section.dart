@@ -1,3 +1,4 @@
+import 'package:client/features/admin/screens/admin_attendance_override_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -573,7 +574,11 @@ class AdminHomeSection extends ConsumerWidget {
               ),
               onTap: () {
                 Navigator.pop(context);
-                _showOverrideAttendance(context, ref);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AdminAttendanceOverrideScreen(),
+                  ),
+                );
               },
             ),
             ListTile(

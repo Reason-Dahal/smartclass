@@ -13,6 +13,11 @@ const {
   resetUserPassword,
   manualEnroll,
   getCourseEnrollmentStatus,
+  getAdminAttendanceDates,
+  getAdminAttendanceForDate,
+  adminEditAttendance,
+  getAdminMarksheetsByCourse,
+  adminBulkUploadMarksheets,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -43,5 +48,14 @@ router.patch('/users/reset-password', resetUserPassword);
 //Enroll
 router.post('/enroll', manualEnroll);
 router.get('/courses/:courseId/enrollment-status', getCourseEnrollmentStatus);
+
+// Attendance override (full access — no ownership restriction)
+router.get('/courses/:courseId/attendance-dates',   getAdminAttendanceDates);
+router.get('/courses/:courseId/attendance/:date',   getAdminAttendanceForDate);
+router.patch('/courses/:courseId/attendance/:date', adminEditAttendance);
+
+// Marksheet override (full access — no ownership restriction)
+router.get('/courses/:courseId/marksheets',       getAdminMarksheetsByCourse);
+router.post('/courses/:courseId/marksheets/bulk', adminBulkUploadMarksheets);
 
 module.exports = router;

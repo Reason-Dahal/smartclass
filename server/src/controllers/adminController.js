@@ -940,6 +940,300 @@ const overrideMarksheet = async (req, res) => {
   }
 };
 
+// ─── ADMIN — ATTENDANCE OVERRIDE (full access, no ownership restriction) ─
+
+// Validates a date string is well-formed before it ever reaches MongoDB
+const isValidDateString = (value) => {
+  if (!value || typeof value !== 'string') return false;
+  const parsed = new Date(value);
+  return !isNaN(parsed.getTime());
+};
+
+// Validates term is a sane positive integer
+const isValidTerm = (value) => {
+  const num = Number(value);
+  return Number.isInteger(num) && num >= 1 && num <= 12;
+};
+
+const getAdminAttendanceDates = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    const dates = await Attendance.distinct('date', { courseId });
+    dates.sort((a, b) => new Date(b) - new Date(a));
+
+    res.status(200).json({
+      success: true,
+      data: { dates },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const getAdminAttendanceForDate = async (req, res) => {
+  try {
+    const { courseId, date } = req.params;
+
+    if (!isValidDateString(date)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid date format' },
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    const attendanceDate = new Date(date);
+    const records = await Attendance.find({
+      courseId,
+      date: attendanceDate,
+    }).populate({
+      path: 'studentId',
+      populate: { path: 'userId', select: 'name' },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { records },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const adminEditAttendance = async (req, res) => {
+  try {
+    const { courseId, date } = req.params;
+    const { records } = req.body;
+
+    if (!isValidDateString(date)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid date format' },
+      });
+    }
+
+    if (!records || !Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'records array is required' },
+      });
+    }
+
+    // Validate every record's shape before touching the database —
+    // same principle as the marksheet fix: reject bad input up front,
+    // never partially write.
+    const validStatuses = ['present', 'absent', 'late'];
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
+      if (!r.studentId || typeof r.studentId !== 'string') {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Row ${i + 1}: missing or invalid studentId. Nothing was saved.`,
+          },
+        });
+      }
+      if (!validStatuses.includes(r.status)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Row ${i + 1}: status must be present, absent, or late. Nothing was saved.`,
+          },
+        });
+      }
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    const attendanceDate = new Date(date);
+
+    const results = await Promise.all(
+      records.map(({ studentId, status }) =>
+        Attendance.findOneAndUpdate(
+          { courseId, studentId, date: attendanceDate },
+          { courseId, studentId, date: attendanceDate, status, markedBy: req.user._id },
+          { upsert: true, new: true, runValidators: true }
+        )
+      )
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message: `Attendance updated for ${results.length} students`,
+        records: results,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+// ADMIN MARKSHEET OVERRIDE 
+
+const getAdminMarksheetsByCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { term } = req.query;
+
+    if (term !== undefined && !isValidTerm(term)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid term value' },
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    const filter = { courseId };
+    if (term !== undefined) filter.term = parseInt(term);
+
+    const marksheets = await Marksheet.find(filter).populate({
+      path: 'studentId',
+      populate: { path: 'userId', select: 'name' },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { marksheets },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+const adminBulkUploadMarksheets = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { term, marksheets } = req.body;
+
+    if (!isValidTerm(term)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid or missing term' },
+      });
+    }
+
+    if (!marksheets || !Array.isArray(marksheets) || marksheets.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'marksheets array is required' },
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Course not found' },
+      });
+    }
+
+    /* 
+     Validate every record before writing anything — prevents partial
+     saves without relying on transactions (M0 tier doesn't support them
+     reliably — see teacherController.bulkUploadMarksheets for the
+     full reasoning behind this pattern).
+    */
+    for (let i = 0; i < marksheets.length; i++) {
+      const m = marksheets[i];
+      if (!m.studentId || typeof m.studentId !== 'string' || m.studentId.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Row ${i + 1}: missing or invalid studentId. Nothing was saved.`,
+          },
+        });
+      }
+      const numericFields = [
+        m.internalExamMarks,
+        m.internalExamTotalMarks,
+        m.teacherEvaluationScore,
+      ];
+      if (numericFields.some((v) => v === undefined || v === null || isNaN(Number(v)))) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Row ${i + 1}: marks values must be valid numbers. Nothing was saved.`,
+          },
+        });
+      }
+    }
+
+    const results = await Promise.all(
+      marksheets.map(({ studentId, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore }) =>
+        Marksheet.findOneAndUpdate(
+          { studentId, courseId, term },
+          {
+            studentId, courseId, term,
+            internalExamMarks, internalExamTotalMarks,
+            teacherEvaluationScore,
+            uploadedBy: req.user._id,
+          },
+          { upsert: true, new: true, runValidators: true }
+        )
+      )
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message: `Marksheets uploaded for ${results.length} students`,
+        marksheets: results,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
 //  ENROLLMENT MANAGEMENT 
 const manualEnroll = async (req, res) => {
   try {
@@ -1286,6 +1580,11 @@ module.exports = {
   manualEnroll,
   getCourseEnrollmentStatus, 
   overrideAttendance, overrideMarksheet,
+  getAdminAttendanceDates,
+  getAdminAttendanceForDate,
+  adminEditAttendance,
+  getAdminMarksheetsByCourse,
+  adminBulkUploadMarksheets,
   uploadFinalResults,
   getEvaluationConfig, updateEvaluationConfig,
   getSystemReports,
