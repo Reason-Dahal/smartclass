@@ -8,8 +8,9 @@ const Note = require('../models/Note');
 const Marksheet = require('../models/Marksheet');
 const Notification = require('../models/Notification');
 const Student = require('../models/Student');
+const { sendPushToUser } = require('../utils/pushNotification');
 
-// ─── HELPER: verify teacher owns the course ──────────────────────
+// HELPER: verify teacher owns the course
 const verifyTeacherCourse = async (teacherUserId, courseId) => {
   const teacher = await Teacher.findOne({ userId: teacherUserId });
   if (!teacher) return null;
@@ -23,7 +24,7 @@ const verifyTeacherCourse = async (teacherUserId, courseId) => {
   return course ? { teacher, course } : null;
 };
 
-// ─── ATTENDANCE ───────────────────────────────────────────────────
+// ATTENDANCE
 
 const takeAttendance = async (req, res) => {
   try {
@@ -304,72 +305,90 @@ const getAttendanceForDate = async (req, res) => {
   }
 };
 
-// ─── ASSIGNMENTS ──────────────────────────────────────────────────
-
+// ASSIGNMENTS
 const createAssignment = async (req, res) => {
-    try {
-      const { courseId } = req.params;
-      const { title, description, dueDate } = req.body;
-  
-      if (!title || !dueDate) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'title and dueDate are required',
-          },
-        });
-      }
-  
-      const verified = await verifyTeacherCourse(req.user._id, courseId);
-      if (!verified) {
-        return res.status(404).json({
-          success: false,
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Course not found or you are not the teacher of this course',
-          },
-        });
-      }
-  
-      const assignment = await Assignment.create({
-        courseId,
-        createdBy: req.user._id,
-        title,
-        description,
-        dueDate: new Date(dueDate),
-      });
-  
-      // Notify all enrolled students
-      const enrollments = await Enrollment.find({
-        courseId,
-        isActive: true,
-      }).populate('studentId', 'userId');
-  
-      const notifications = enrollments.map((e) => ({
-        userId: e.studentId.userId,
-        type: 'assignment',
-        message: `New assignment posted in ${verified.course.subjectName}: ${title}`,
-        relatedId: assignment._id,
-      }));
-  
-      if (notifications.length > 0) {
-        await Notification.insertMany(notifications, { ordered: false });
-      }
+  try {
+    const { courseId } = req.params;
+    const { title, description, dueDate } = req.body;
 
-      Course.incrementUsage(req.params.courseId);
-  
-      res.status(201).json({
-        success: true,
-        data: { assignment },
-      });
-    } catch (error) {
-      res.status(500).json({
+    if (!title || !dueDate) {
+      return res.status(400).json({
         success: false,
-        error: { code: 'SERVER_ERROR', message: error.message },
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'title and dueDate are required',
+        },
       });
     }
-  };
+
+    const verified = await verifyTeacherCourse(req.user._id, courseId);
+    if (!verified) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Course not found or you are not the teacher of this course',
+        },
+      });
+    }
+
+    const assignment = await Assignment.create({
+      courseId,
+      createdBy: req.user._id,
+      title,
+      description,
+      dueDate: new Date(dueDate),
+    });
+
+    // Notify all enrolled students — nested populate needed so we
+    // have each student's fcmToken available for the push step below,
+    // not just their userId reference.
+    const enrollments = await Enrollment.find({
+      courseId,
+      isActive: true,
+    }).populate({
+      path: 'studentId',
+      populate: { path: 'userId', select: 'fcmToken' },
+    });
+
+    const notifications = enrollments.map((e) => ({
+      userId: e.studentId.userId._id,
+      type: 'assignment',
+      message: `New assignment posted in ${verified.course.subjectName}: ${title}`,
+      relatedId: assignment._id,
+    }));
+
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications, { ordered: false });
+    }
+
+    // Fire real push notifications — no await, same fire-and-forget
+    // discipline as Course.incrementUsage below. A push failure must
+    // never block or slow down the actual assignment-creation response.
+    enrollments.forEach((e) => {
+      sendPushToUser(e.studentId.userId, {
+        title: verified.course.subjectName,
+        body: `New assignment: ${title}`,
+        data: {
+          type: 'assignment',
+          relatedId: assignment._id.toString(),
+        },
+      });
+    });
+
+    Course.incrementUsage(req.params.courseId);
+
+    res.status(201).json({
+      success: true,
+      data: { assignment },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
   
   const updateAssignment = async (req, res) => {
     try {
@@ -492,13 +511,26 @@ const createAssignment = async (req, res) => {
       submission.feedback = feedback || null;
       await submission.save();
   
-      // Notify the student their work was graded
-      const student = await Student.findById(submission.studentId);
+      // Notify the student their work was graded — populate userId
+      // fully so fcmToken is available for the push step below
+      const student = await Student.findById(submission.studentId)
+        .populate('userId', 'fcmToken');
+
       await Notification.create({
-        userId: student.userId,
+        userId: student.userId._id,
         type: 'grade',
         message: `Your submission for "${submission.assignmentId.title}" has been graded: ${grade}`,
         relatedId: submission._id,
+      });
+
+      // Fire real push notification — fire-and-forget
+      sendPushToUser(student.userId, {
+        title: 'Assignment Graded',
+        body: `"${submission.assignmentId.title}" — Grade: ${grade}`,
+        data: {
+          type: 'grade',
+          relatedId: submission._id.toString(),
+        },
       });
   
       res.status(200).json({
@@ -514,7 +546,6 @@ const createAssignment = async (req, res) => {
   };
   
   //  NOTES 
-  
   const uploadNote = async (req, res) => {
     try {
       const { courseId } = req.params;
@@ -548,14 +579,17 @@ const createAssignment = async (req, res) => {
         fileUrl,
       });
   
-      // Notify all enrolled students
+      // Notify all enrolled students — nested populate for fcmToken access
       const enrollments = await Enrollment.find({
         courseId,
         isActive: true,
-      }).populate('studentId', 'userId');
+      }).populate({
+        path: 'studentId',
+        populate: { path: 'userId', select: 'fcmToken' },
+      });
   
       const notifications = enrollments.map((e) => ({
-        userId: e.studentId.userId,
+        userId: e.studentId.userId._id,
         type: 'note',
         message: `New note uploaded in ${verified.course.subjectName}: ${title}`,
         relatedId: note._id,
@@ -564,6 +598,18 @@ const createAssignment = async (req, res) => {
       if (notifications.length > 0) {
         await Notification.insertMany(notifications, { ordered: false });
       }
+
+      // Fire real push notifications — fire-and-forget
+      enrollments.forEach((e) => {
+        sendPushToUser(e.studentId.userId, {
+          title: verified.course.subjectName,
+          body: `New note: ${title}`,
+          data: {
+            type: 'note',
+            relatedId: note._id.toString(),
+          },
+        });
+      });
 
       Course.incrementUsage(req.params.courseId);
 

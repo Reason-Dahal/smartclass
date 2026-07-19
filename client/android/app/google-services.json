@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1072582012438",
+    "project_id": "smartclass-ef1bf",
+    "storage_bucket": "smartclass-ef1bf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1072582012438:android:f09387d74398be66180f37",
+        "android_client_info": {
+          "package_name": "com.smartclass.client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAil6a54Y20Cd4UhEnfF7d7I5vbqNZcAVg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

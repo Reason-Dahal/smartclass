@@ -8,6 +8,7 @@ const {
   forgotPassword,
   verifyOtp,
   resetPassword,
+  registerFcmToken,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
@@ -62,6 +63,7 @@ const verifyOtpLimiter = rateLimit({
 router.post('/login',           loginLimiter, login);
 router.get('/me',               protect, getMe);
 router.post('/change-password', protect, changePassword);
+router.post('/fcm-token',       protect, registerFcmToken);
 
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.post('/verify-otp',      verifyOtpLimiter, verifyOtp);

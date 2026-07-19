@@ -59,6 +59,24 @@ const userSchema = new mongoose.Schema(
       default:  null,
       select:   false,
     },
+    otpCode: {
+      type:     String,
+      default:  null,
+      select:   false,
+    },
+    otpExpiry: {
+      type:     Date,
+      default:  null,
+      select:   false,
+    },
+
+    // Push notifications (Android via Firebase Cloud Messaging).
+    // Not select: false — unlike otpCode, this needs to be readable
+    // in normal queries whenever the backend needs to send a push.
+    fcmToken: {
+      type:    String,
+      default: null,
+    },
   },
   {
     timestamps: true,

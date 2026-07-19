@@ -338,6 +338,36 @@ const resetPassword = async (req, res) => {
     });
   }
 };
+//  REGISTER FCM TOKEN
+/* Called by Flutter after login and whenever Firebase issues a new
+ or refreshed token. Overwrites whatever token was previously
+ stored — a user is assumed to be using one device at a time for
+ push purposes, which is a reasonable simplification for this
+ system's scale.*/
+const registerFcmToken = async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+
+    if (!fcmToken || typeof fcmToken !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'fcmToken is required' },
+      });
+    }
+
+    await User.findByIdAndUpdate(req.user._id, { fcmToken });
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Push notification token registered' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
 
 module.exports = 
 { 
@@ -347,4 +377,5 @@ module.exports =
    forgotPassword,
    verifyOtp,
    resetPassword, 
+   registerFcmToken,
 };

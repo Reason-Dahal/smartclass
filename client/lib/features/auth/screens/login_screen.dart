@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/app_router.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../data/auth_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -54,6 +55,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
 
       if (!mounted) return;
+
+      // Register this device for push notifications now that we
+      // have an authenticated session. Runs regardless of role —
+      // teachers and admins should also be able to receive pushes
+      // in the future, even though today only student-facing events
+      // (assignment/note/grade) actually trigger one.
+      PushNotificationService.initialize();
 
       // If must change password — go to change password screen
       if (user.mustChangePassword) {
