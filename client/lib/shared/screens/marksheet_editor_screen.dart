@@ -5,11 +5,15 @@ import '../../core/constants/app_colors.dart';
 /// only) and admin (any course, override mode) via dependency injection —
 /// the screen doesn't know or care which role is using it, it just calls
 /// whatever functions it's given.
+///
+/// Always loads the full enrolled roster AND existing marksheets, then
+/// merges them by studentId — so newly enrolled students always appear,
+/// pre-filled with existing marks where available and empty otherwise.
 class MarksheetEditorScreen extends StatefulWidget {
   final String courseId;
   final String subjectName;
   final int courseTerm;
-  final String mode; // 'create' or 'edit'
+  final String mode; // kept only for the AppBar title wording
 
   final Future<List<Map<String, dynamic>>> Function(String courseId)
   getCourseStudents;
@@ -42,22 +46,27 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
   bool _isSaving = false;
   String? _error;
 
-  List<Map<String, dynamic>> _marksheets = [];
-  List<Map<String, dynamic>> _students = [];
+  // Full enrolled roster — always the source of truth for who appears.
+  List<Map<String, dynamic>> _roster = [];
+
+  // All existing marksheets for this course, across whichever terms exist.
+  List<Map<String, dynamic>> _allMarksheets = [];
 
   List<int> _terms = [];
   int _selectedTerm = 1;
 
+  // Every controller is keyed by studentId — consistently, regardless
+  // of whether that student already has a marksheet or not.
   final Map<String, TextEditingController> _marksControllers = {};
   final Map<String, TextEditingController> _evalControllers = {};
   final TextEditingController _sharedTotalController = TextEditingController(
     text: '100',
   );
 
-  final List<String> _studentIds = [];
-  final List<String> _studentNames = [];
-
-  bool get _isCreateMode => widget.mode == 'create';
+  // Ordered list of studentIds currently shown, and their display names —
+  // rebuilt from the roster every time the selected term changes.
+  List<String> _studentIds = [];
+  final Map<String, String> _studentNames = {};
 
   @override
   void initState() {
@@ -66,42 +75,30 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _isLoading = true);
     try {
-      if (_isCreateMode) {
-        final students = await widget.getCourseStudents(widget.courseId);
-        setState(() {
-          _students = students;
-          _terms = [widget.courseTerm];
-          _selectedTerm = widget.courseTerm;
-          _isLoading = false;
-        });
-        _buildControllersFromStudents();
-      } else {
-        final marksheets = await widget.getMarksheetsByCourse(widget.courseId);
+      // Always fetch both — the roster tells us WHO should appear,
+      // the marksheets tell us what marks (if any) they already have.
+      final roster = await widget.getCourseStudents(widget.courseId);
+      final marksheets = await widget.getMarksheetsByCourse(widget.courseId);
 
-        if (marksheets.isEmpty) {
-          final students = await widget.getCourseStudents(widget.courseId);
-          setState(() {
-            _students = students;
-            _terms = [widget.courseTerm];
-            _selectedTerm = widget.courseTerm;
-            _isLoading = false;
-          });
-          _buildControllersFromStudents();
-          return;
-        }
+      final termsFromMarksheets = marksheets
+          .map((m) => m['term'] as int)
+          .toSet();
+      final terms = ({widget.courseTerm, ...termsFromMarksheets}).toList()
+        ..sort();
 
-        final terms = marksheets.map((m) => m['term'] as int).toSet().toList()
-          ..sort();
+      setState(() {
+        _roster = roster;
+        _allMarksheets = marksheets;
+        _terms = terms;
+        _selectedTerm = terms.contains(widget.courseTerm)
+            ? widget.courseTerm
+            : terms.first;
+        _isLoading = false;
+      });
 
-        setState(() {
-          _marksheets = marksheets;
-          _terms = terms;
-          _selectedTerm = terms.first;
-          _isLoading = false;
-        });
-        _buildControllersFromMarksheets();
-      }
+      _buildForSelectedTerm();
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -110,58 +107,59 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
     }
   }
 
-  void _buildControllersFromStudents() {
+  // Rebuilds the visible list and controllers for whichever term is
+  // currently selected — always starting from the full roster, then
+  // overlaying existing marks for that term where they exist.
+  void _buildForSelectedTerm() {
     _disposeControllers();
-    _studentIds.clear();
+    _studentIds = [];
     _studentNames.clear();
 
-    for (final student in _students) {
-      final id = student['studentId']?.toString() ?? '';
-      final name = student['name']?.toString() ?? 'Student';
-
-      _studentIds.add(id);
-      _studentNames.add(name);
-      _marksControllers[id] = TextEditingController();
-      _evalControllers[id] = TextEditingController();
-    }
-    setState(() {});
-  }
-
-  void _buildControllersFromMarksheets() {
-    _disposeControllers();
-    _studentIds.clear();
-    _studentNames.clear();
-
-    final termMarksheets = _marksheets
+    final marksheetsForTerm = _allMarksheets
         .where((m) => m['term'] == _selectedTerm)
         .toList();
 
-    for (final m in termMarksheets) {
-      final id = m['_id']?.toString() ?? '';
+    // Map existing marksheet data by studentId for quick lookup.
+    final marksByStudentId = <String, Map<String, dynamic>>{};
+    for (final m in marksheetsForTerm) {
       final studentData = m['studentId'] is Map
           ? m['studentId'] as Map
           : <String, dynamic>{};
-      final userData = studentData['userId'] is Map
-          ? studentData['userId'] as Map
-          : <String, dynamic>{};
-
-      _studentIds.add(studentData['_id']?.toString() ?? '');
-      _studentNames.add(userData['name'] ?? 'Student');
-
-      _marksControllers[id] = TextEditingController(
-        text: m['internalExamMarks']?.toString() ?? '',
-      );
-      _evalControllers[id] = TextEditingController(
-        text: m['teacherEvaluationScore']?.toString() ?? '',
-      );
-    }
-
-    if (termMarksheets.isNotEmpty) {
-      final existingTotal = termMarksheets.first['internalExamTotalMarks'];
-      if (existingTotal != null) {
-        _sharedTotalController.text = existingTotal.toString();
+      final studentId = studentData['_id']?.toString() ?? '';
+      if (studentId.isNotEmpty) {
+        marksByStudentId[studentId] = m;
       }
     }
+
+    String? sharedTotalFromExisting;
+
+    for (final student in _roster) {
+      final studentId = student['studentId']?.toString() ?? '';
+      final name = student['name']?.toString() ?? 'Student';
+      if (studentId.isEmpty) continue;
+
+      _studentIds.add(studentId);
+      _studentNames[studentId] = name;
+
+      final existingMark = marksByStudentId[studentId];
+
+      _marksControllers[studentId] = TextEditingController(
+        text: existingMark?['internalExamMarks']?.toString() ?? '',
+      );
+      _evalControllers[studentId] = TextEditingController(
+        text: existingMark?['teacherEvaluationScore']?.toString() ?? '',
+      );
+
+      // Pick up the shared total from whichever existing record has one —
+      // they should all agree, so the first one found is enough.
+      if (sharedTotalFromExisting == null &&
+          existingMark?['internalExamTotalMarks'] != null) {
+        sharedTotalFromExisting = existingMark!['internalExamTotalMarks']
+            .toString();
+      }
+    }
+
+    _sharedTotalController.text = sharedTotalFromExisting ?? '100';
 
     setState(() {});
   }
@@ -186,41 +184,16 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
     final sharedTotal = double.tryParse(_sharedTotalController.text) ?? 0;
 
     try {
-      final List<Map<String, dynamic>> payload;
-
-      if (_isCreateMode || _marksheets.isEmpty) {
-        payload = _studentIds.map((studentId) {
-          return {
-            'studentId': studentId,
-            'internalExamMarks':
-                double.tryParse(_marksControllers[studentId]?.text ?? '0') ?? 0,
-            'internalExamTotalMarks': sharedTotal,
-            'teacherEvaluationScore':
-                double.tryParse(_evalControllers[studentId]?.text ?? '0') ?? 0,
-          };
-        }).toList();
-      } else {
-        final termMarksheets = _marksheets
-            .where((m) => m['term'] == _selectedTerm)
-            .toList();
-
-        payload = termMarksheets.map((m) {
-          final id = m['_id']?.toString() ?? '';
-          final studentData = m['studentId'] is Map
-              ? m['studentId'] as Map
-              : <String, dynamic>{};
-          final studentId = studentData['_id']?.toString() ?? '';
-
-          return {
-            'studentId': studentId,
-            'internalExamMarks':
-                double.tryParse(_marksControllers[id]?.text ?? '0') ?? 0,
-            'internalExamTotalMarks': sharedTotal,
-            'teacherEvaluationScore':
-                double.tryParse(_evalControllers[id]?.text ?? '0') ?? 0,
-          };
-        }).toList();
-      }
+      final payload = _studentIds.map((studentId) {
+        return {
+          'studentId': studentId,
+          'internalExamMarks':
+              double.tryParse(_marksControllers[studentId]?.text ?? '0') ?? 0,
+          'internalExamTotalMarks': sharedTotal,
+          'teacherEvaluationScore':
+              double.tryParse(_evalControllers[studentId]?.text ?? '0') ?? 0,
+        };
+      }).toList();
 
       await widget.bulkUpload(
         widget.courseId,
@@ -250,36 +223,18 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
     }
   }
 
-  List<String> get _keys {
-    if (_isCreateMode || _marksheets.isEmpty) return _studentIds;
-    return _marksheets
-        .where((m) => m['term'] == _selectedTerm)
-        .map((m) => m['_id']?.toString() ?? '')
-        .toList();
-  }
-
-  List<String> get _names {
-    if (_isCreateMode || _marksheets.isEmpty) return _studentNames;
-    return _marksheets.where((m) => m['term'] == _selectedTerm).map((m) {
-      final studentData = m['studentId'] is Map
-          ? m['studentId'] as Map
-          : <String, dynamic>{};
-      final userData = studentData['userId'] is Map
-          ? studentData['userId'] as Map
-          : <String, dynamic>{};
-      return userData['name']?.toString() ?? 'Student';
-    }).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final keys = _keys;
-    final names = _names;
+    // A student "has" a marksheet for this term if any existing record
+    // matches — purely for the AppBar title's wording, not for filtering.
+    final hasAnyMarksheetForTerm = _allMarksheets.any(
+      (m) => m['term'] == _selectedTerm,
+    );
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '${_isCreateMode ? 'Enter' : 'Edit'} Marksheet — ${widget.subjectName}',
+          '${hasAnyMarksheetForTerm ? 'Edit' : 'Enter'} Marksheet — ${widget.subjectName}',
           style: const TextStyle(fontSize: 15),
           overflow: TextOverflow.ellipsis,
         ),
@@ -312,11 +267,11 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? Center(child: Text(_error!))
-          : keys.isEmpty
+          : _studentIds.isEmpty
           ? const Center(child: Text('No students enrolled in this course'))
           : Column(
               children: [
-                if (!_isCreateMode && _terms.length > 1)
+                if (_terms.length > 1)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: DropdownButtonFormField<int>(
@@ -337,13 +292,12 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
                       onChanged: (val) {
                         if (val != null) {
                           setState(() => _selectedTerm = val);
-                          _buildControllersFromMarksheets();
+                          _buildForSelectedTerm();
                         }
                       },
                     ),
-                  ),
-
-                if (_isCreateMode)
+                  )
+                else
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
@@ -436,13 +390,11 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
                 Expanded(
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: keys.length,
+                    itemCount: _studentIds.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final key = keys[index];
-                      final name = index < names.length
-                          ? names[index]
-                          : 'Student ${index + 1}';
+                      final studentId = _studentIds[index];
+                      final name = _studentNames[studentId] ?? 'Student';
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(
@@ -461,7 +413,7 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
                             ),
                             Expanded(
                               child: TextField(
-                                controller: _marksControllers[key],
+                                controller: _marksControllers[studentId],
                                 textAlign: TextAlign.center,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
@@ -501,7 +453,7 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
                             const SizedBox(width: 4),
                             Expanded(
                               child: TextField(
-                                controller: _evalControllers[key],
+                                controller: _evalControllers[studentId],
                                 textAlign: TextAlign.center,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
