@@ -104,9 +104,33 @@ const getTeachers = async (req, res) => {
     const teachers = await Teacher.find()
       .populate('userId', 'name email role status createdAt');
 
+    // Fetch actual course details per teacher — used to group
+    // "Assigned" teachers by program and subject in the admin UI,
+    // not just show a count.
+    const teachersWithCourses = await Promise.all(
+      teachers.map(async (teacher) => {
+        const courses = await Course.find({
+          teacherId: teacher._id,
+          isActive: true,
+        })
+          .populate('programId', 'name')
+          .select('subjectName term programId');
+
+        return {
+          ...teacher.toObject(),
+          courseCount: courses.length,
+          courses: courses.map((c) => ({
+            subjectName: c.subjectName,
+            term: c.term,
+            programName: c.programId?.name || '',
+          })),
+        };
+      })
+    );
+
     res.status(200).json({
       success: true,
-      data: { teachers },
+      data: { teachers: teachersWithCourses },
     });
   } catch (error) {
     res.status(500).json({
@@ -377,9 +401,24 @@ const getStudents = async (req, res) => {
       .populate('programId', 'name type')
       .populate('batchId', 'name currentTerm intakeYear');
 
+    // Count active enrollments per student — computed live, so it
+    // always reflects reality even as enrollments change.
+    const studentsWithEnrollmentCount = await Promise.all(
+      students.map(async (student) => {
+        const enrollmentCount = await Enrollment.countDocuments({
+          studentId: student._id,
+          isActive: true,
+        });
+        return {
+          ...student.toObject(),
+          enrollmentCount,
+        };
+      })
+    );
+
     res.status(200).json({
       success: true,
-      data: { students },
+      data: { students: studentsWithEnrollmentCount },
     });
   } catch (error) {
     res.status(500).json({

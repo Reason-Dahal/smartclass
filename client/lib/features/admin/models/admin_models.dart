@@ -1,3 +1,23 @@
+class TeacherCourseEntry {
+  final String subjectName;
+  final int term;
+  final String programName;
+
+  TeacherCourseEntry({
+    required this.subjectName,
+    required this.term,
+    required this.programName,
+  });
+
+  factory TeacherCourseEntry.fromJson(Map<String, dynamic> json) {
+    return TeacherCourseEntry(
+      subjectName: json['subjectName'] ?? '',
+      term: json['term'] ?? 0,
+      programName: json['programName'] ?? '',
+    );
+  }
+}
+
 class AdminUserModel {
   final String id;
   final String profileId;
@@ -12,6 +32,14 @@ class AdminUserModel {
   final String? programId; // students only
   final String? batchId; // students only
 
+  // V2.5 addition — active links count, used to split
+  // teachers by course load / students by enrollment status
+  final int activeCount;
+
+  // V2.5 addition — actual course list for teachers, used to
+  // group the "Assigned" section by program and subject
+  final List<TeacherCourseEntry> courses;
+
   AdminUserModel({
     required this.id,
     required this.profileId,
@@ -24,6 +52,8 @@ class AdminUserModel {
     this.rollNumber,
     this.programId,
     this.batchId,
+    this.activeCount = 0,
+    this.courses = const [],
   });
 
   factory AdminUserModel.fromJson(Map<String, dynamic> json) {
@@ -40,6 +70,8 @@ class AdminUserModel {
         ? batchRaw['_id'] as String?
         : batchRaw as String?;
 
+    final coursesRaw = json['courses'] as List? ?? [];
+
     return AdminUserModel(
       id: userId['_id'] ?? json['_id'] ?? '',
       profileId: json['_id'] ?? '',
@@ -54,6 +86,13 @@ class AdminUserModel {
       rollNumber: json['rollNumber'] as String?,
       programId: programId,
       batchId: batchId,
+      // courseCount comes from getTeachers, enrollmentCount from
+      // getStudents — only one will ever be present per response,
+      // so this simply picks up whichever exists.
+      activeCount: (json['courseCount'] ?? json['enrollmentCount'] ?? 0) as int,
+      courses: coursesRaw
+          .map((c) => TeacherCourseEntry.fromJson(c as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:client/features/admin/models/admin_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -15,16 +16,136 @@ class AdminTeachersSection extends ConsumerWidget {
 
     return Scaffold(
       body: teachers.when(
-        data: (list) => list.isEmpty
-            ? const Center(child: Text('No teachers yet'))
-            : RefreshIndicator(
-                onRefresh: () async => ref.invalidate(adminTeachersProvider),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: list.length,
-                  itemBuilder: (context, index) => UserCard(user: list[index]),
-                ),
-              ),
+        data: (list) {
+          if (list.isEmpty) {
+            return const Center(child: Text('No teachers yet'));
+          }
+
+          final assigned = list.where((t) => t.activeCount > 0).toList();
+          final unassigned = list.where((t) => t.activeCount == 0).toList();
+
+          // Group assigned teachers by program — a teacher can appear
+          // under more than one program if they teach in both, which
+          // accurately reflects their real course load.
+          final Map<String, List<AdminUserModel>> byProgram = {};
+          for (final teacher in assigned) {
+            final programNames = teacher.courses
+                .map((c) => c.programName)
+                .toSet();
+            for (final programName in programNames) {
+              byProgram.putIfAbsent(programName, () => []).add(teacher);
+            }
+          }
+          final programNames = byProgram.keys.toList()..sort();
+
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(adminTeachersProvider),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (assigned.isNotEmpty) ...[
+                  _SectionHeader(
+                    label: 'Assigned',
+                    count: assigned.length,
+                    color: AppColors.success,
+                  ),
+                  const SizedBox(height: 8),
+                  ...programNames.map((programName) {
+                    final teachersInProgram = byProgram[programName]!;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppColors.borderLight),
+                      ),
+                      child: ExpansionTile(
+                        initiallyExpanded: true,
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.infoLight,
+                          child: Text(
+                            programName.isNotEmpty
+                                ? programName[0].toUpperCase()
+                                : 'P',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          programName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${teachersInProgram.length} teacher${teachersInProgram.length > 1 ? 's' : ''}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        children: teachersInProgram.map((teacher) {
+                          final coursesInThisProgram = teacher.courses
+                              .where((c) => c.programName == programName)
+                              .toList();
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                UserCard(user: teacher),
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 8,
+                                    bottom: 4,
+                                  ),
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    children: coursesInThisProgram.map((c) {
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.infoLight,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${c.subjectName} · Term ${c.term}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                ],
+                if (unassigned.isNotEmpty) ...[
+                  _SectionHeader(
+                    label: 'Unassigned',
+                    count: unassigned.length,
+                    color: AppColors.textMuted,
+                    subtitle: 'No active course load',
+                  ),
+                  ...unassigned.map((t) => UserCard(user: t)),
+                ],
+              ],
+            ),
+          );
+        },
         loading: () => const LoadingWidget(message: 'Loading teachers...'),
         error: (e, _) => AppErrorWidget(
           message: e.toString(),
@@ -179,5 +300,77 @@ class AdminTeachersSection extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final String? subtitle;
+
+  const _SectionHeader({
+    required this.label,
+    required this.count,
+    required this.color,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 18,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                subtitle!,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                  fontStyle: FontStyle.italic,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
