@@ -1,3 +1,4 @@
+import 'package:client/features/teacher/screens/tabs/teacher_notes_tab.dart';
 import 'package:client/shared/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -46,6 +47,7 @@ class _TeacherDashboardScreenState
       ),
       const TeacherCoursesTab(),
       const TeacherGradingTab(),
+      const TeacherNotesTab(),
     ];
 
     return PopScope(
@@ -98,6 +100,11 @@ class _TeacherDashboardScreenState
               activeIcon: Icon(Icons.grading),
               label: 'Grading',
             ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.description_outlined),
+              activeIcon: Icon(Icons.description),
+              label: 'Notes',
+            ),
           ],
         ),
       ),
@@ -133,6 +140,8 @@ class _TeacherDashboardScreenState
         return 'My Courses';
       case 2:
         return 'Grading';
+      case 3:
+        return 'My Notes';
       default:
         return AppConstants.appName;
     }

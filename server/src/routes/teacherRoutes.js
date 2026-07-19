@@ -14,6 +14,8 @@ const {
   gradeSubmission,
   uploadNote,
   deleteNote,
+  getMyNotes,
+  replaceNoteFile,
   uploadMarksheet,
   bulkUploadMarksheets,
   getMarksheetsByCourse,
@@ -44,6 +46,8 @@ router.get('/courses/:courseId/assignments', getCourseAssignments);
 // Notes
 router.post('/courses/:courseId/notes', uploadNote);
 router.delete('/notes/:id', deleteNote);
+router.get('/notes', getMyNotes);
+router.patch('/notes/:id', replaceNoteFile);
 
 // Marksheets
 router.post('/courses/:courseId/marksheets', uploadMarksheet);

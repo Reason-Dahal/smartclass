@@ -513,7 +513,7 @@ const createAssignment = async (req, res) => {
     }
   };
   
-  // ─── NOTES ───────────────────────────────────────────────────────
+  //  NOTES 
   
   const uploadNote = async (req, res) => {
     try {
@@ -615,6 +615,116 @@ const createAssignment = async (req, res) => {
       });
     }
   };
+
+  //  GET MY NOTES (all courses, grouped by course)
+const getMyNotes = async (req, res) => {
+  try {
+    const teacher = await Teacher.findOne({ userId: req.user._id });
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Teacher profile not found' },
+      });
+    }
+
+    // Every active course this teacher teaches
+    const courses = await Course.find({
+      teacherId: teacher._id,
+      isActive: true,
+    }).populate('programId', 'name');
+
+    const courseIds = courses.map((c) => c._id);
+
+    const notes = await Note.find({
+      courseId: { $in: courseIds },
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    // Group notes under their course, and courses under their program —
+    // same Faculty > Subject shape used throughout the app already.
+    const courseMap = {};
+    courses.forEach((c) => {
+      courseMap[c._id.toString()] = {
+        courseId: c._id,
+        subjectName: c.subjectName,
+        programName: c.programId?.name || '',
+        term: c.term,
+        notes: [],
+      };
+    });
+
+    notes.forEach((note) => {
+      const key = note.courseId.toString();
+      if (courseMap[key]) {
+        courseMap[key].notes.push({
+          _id: note._id,
+          title: note.title,
+          fileUrl: note.fileUrl,
+          createdAt: note.createdAt,
+        });
+      }
+    });
+
+    // Only include courses that actually have at least one note
+    const groups = Object.values(courseMap).filter(
+      (c) => c.notes.length > 0
+    );
+
+    res.status(200).json({
+      success: true,
+      data: { groups },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
+
+//REPLACE NOTE FILE
+const replaceNoteFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fileUrl } = req.body;
+
+    if (!fileUrl) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'fileUrl is required' },
+      });
+    }
+
+    const note = await Note.findById(id);
+    if (!note) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Note not found' },
+      });
+    }
+
+    const verified = await verifyTeacherCourse(req.user._id, note.courseId);
+    if (!verified) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'You are not the teacher of this course' },
+      });
+    }
+
+    note.fileUrl = fileUrl;
+    await note.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Note file replaced successfully', note },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message },
+    });
+  }
+};
   
   // ─── MARKSHEETS ───────────────────────────────────────────────────
   
@@ -890,6 +1000,8 @@ const getMarksheetsByCourse = async (req, res) => {
     gradeSubmission,
     uploadNote,
     deleteNote,
+    getMyNotes,
+    replaceNoteFile,
     uploadMarksheet,
     bulkUploadMarksheets,
     getCourseStudents,

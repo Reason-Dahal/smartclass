@@ -256,24 +256,24 @@ class TeacherService {
     }
   }
 
-  // ─── NOTES ───────────────────────────────────────────────────────
+  // NOTES
 
-  Future<List<TeacherNoteModel>> getNotes(String courseId) async {
-    try {
-      final response = await _dio.get('/teacher/courses/$courseId/notes');
-      final data = response.data['data'];
-      final notes = (data['notes'] ?? []) as List;
-      return notes.map((e) => TeacherNoteModel.fromJson(e)).toList();
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw ApiException.fromResponse(
-          e.response!.data,
-          e.response!.statusCode,
-        );
-      }
-      throw ApiException.networkError();
-    }
-  }
+  // Future<List<TeacherNoteModel>> getNotes(String courseId) async {
+  //   try {
+  //     final response = await _dio.get('/teacher/courses/$courseId/notes');
+  //     final data = response.data['data'];
+  //     final notes = (data['notes'] ?? []) as List;
+  //     return notes.map((e) => TeacherNoteModel.fromJson(e)).toList();
+  //   } on DioException catch (e) {
+  //     if (e.response != null) {
+  //       throw ApiException.fromResponse(
+  //         e.response!.data,
+  //         e.response!.statusCode,
+  //       );
+  //     }
+  //     throw ApiException.networkError();
+  //   }
+  // }
 
   Future<void> uploadNote(
     String courseId, {
@@ -296,7 +296,54 @@ class TeacherService {
     }
   }
 
-  // ─── MARKSHEETS ──────────────────────────────────────────────────
+  Future<void> deleteNote(String noteId) async {
+    try {
+      await _dio.delete('/teacher/notes/$noteId');
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMyNotes() async {
+    try {
+      final response = await _dio.get('/teacher/notes');
+      final groups = response.data['data']['groups'] as List;
+      return groups.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> replaceNoteFile({
+    required String noteId,
+    required String fileUrl,
+  }) async {
+    try {
+      await _dio.patch('/teacher/notes/$noteId', data: {'fileUrl': fileUrl});
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  // MARKSHEETS
 
   Future<void> uploadMarksheet(
     String courseId, {

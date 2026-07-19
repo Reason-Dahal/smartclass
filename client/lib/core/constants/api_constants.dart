@@ -10,7 +10,7 @@ class ApiConstants {
       return 'http://localhost:5000/api/v1';
     }
     // For physical device — change this to your IP when it changes
-    return 'http://192.168.1.82:5000/api/v1';
+    return 'http://10.0.0.24:5000/api/v1';
   }
 
   // Auth
