@@ -1,4 +1,5 @@
 import 'package:client/shared/screens/marksheet_editor_screen.dart';
+import 'package:client/shared/screens/pdf_viewer_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -417,6 +418,56 @@ class TeacherGradingTab extends ConsumerWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
+                                // Preview submitted file
+                                if (sub.fileUrl != null &&
+                                    sub.fileUrl!.isNotEmpty)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () {
+                                        final fileType =
+                                            sub.fileUrl!.toLowerCase().contains(
+                                              '.pdf',
+                                            )
+                                            ? 'pdf'
+                                            : 'docx';
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => PDFViewerScreen(
+                                              fileUrl: sub.fileUrl!,
+                                              title:
+                                                  '${sub.studentName} — Submission',
+                                              fileType: fileType,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(
+                                        Icons.visibility_outlined,
+                                        size: 14,
+                                      ),
+                                      label: const Text(
+                                        'View submission',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size(0, 30),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  const Text(
+                                    'No file submitted',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textMuted,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                const SizedBox(height: 8),
 
                                 // Grade display or entry
                                 if (sub.grade != null) ...[
@@ -587,7 +638,7 @@ class TeacherGradingTab extends ConsumerWidget {
     );
   }
 
-  // ─── MARKSHEETS (kept from before) ───────────────────────────
+  // MARKSHEETS (kept from before)
 
   void _showMarksheetEntry(
     BuildContext context,
