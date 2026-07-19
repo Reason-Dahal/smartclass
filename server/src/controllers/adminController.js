@@ -1077,12 +1077,22 @@ const adminEditAttendance = async (req, res) => {
 const getAdminMarksheetsByCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { term } = req.query;
+    const { term, examType } = req.query;
 
     if (term !== undefined && !isValidTerm(term)) {
       return res.status(400).json({
         success: false,
         error: { code: 'VALIDATION_ERROR', message: 'Invalid term value' },
+      });
+    }
+
+    if (examType !== undefined && !Marksheet.EXAM_TYPES.includes(examType)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: `examType must be one of: ${Marksheet.EXAM_TYPES.join(', ')}`,
+        },
       });
     }
 
@@ -1096,6 +1106,7 @@ const getAdminMarksheetsByCourse = async (req, res) => {
 
     const filter = { courseId };
     if (term !== undefined) filter.term = parseInt(term);
+    if (examType !== undefined) filter.examType = examType;
 
     const marksheets = await Marksheet.find(filter).populate({
       path: 'studentId',
@@ -1117,12 +1128,22 @@ const getAdminMarksheetsByCourse = async (req, res) => {
 const adminBulkUploadMarksheets = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { term, marksheets } = req.body;
+    const { term, examType, marksheets } = req.body;
 
     if (!isValidTerm(term)) {
       return res.status(400).json({
         success: false,
         error: { code: 'VALIDATION_ERROR', message: 'Invalid or missing term' },
+      });
+    }
+
+    if (!examType || !Marksheet.EXAM_TYPES.includes(examType)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: `examType must be one of: ${Marksheet.EXAM_TYPES.join(', ')}`,
+        },
       });
     }
 
@@ -1177,9 +1198,9 @@ const adminBulkUploadMarksheets = async (req, res) => {
     const results = await Promise.all(
       marksheets.map(({ studentId, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore }) =>
         Marksheet.findOneAndUpdate(
-          { studentId, courseId, term },
+          { studentId, courseId, term, examType },
           {
-            studentId, courseId, term,
+            studentId, courseId, term, examType,
             internalExamMarks, internalExamTotalMarks,
             teacherEvaluationScore,
             uploadedBy: req.user._id,

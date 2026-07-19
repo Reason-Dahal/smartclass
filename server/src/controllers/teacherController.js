@@ -726,20 +726,29 @@ const replaceNoteFile = async (req, res) => {
   }
 };
   
-  // ─── MARKSHEETS ───────────────────────────────────────────────────
-  
+  //  MARKSHEETS 
   const uploadMarksheet = async (req, res) => {
     try {
       const { courseId } = req.params;
-      const { studentId, term, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore } = req.body;
+      const { studentId, term, examType, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore } = req.body;
   
-      if (!studentId || !term || internalExamMarks === undefined ||
+      if (!studentId || !term || !examType || internalExamMarks === undefined ||
           !internalExamTotalMarks || teacherEvaluationScore === undefined) {
         return res.status(400).json({
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: 'studentId, term, internalExamMarks, internalExamTotalMarks and teacherEvaluationScore are required',
+            message: 'studentId, term, examType, internalExamMarks, internalExamTotalMarks and teacherEvaluationScore are required',
+          },
+        });
+      }
+
+      if (!Marksheet.EXAM_TYPES.includes(examType)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `examType must be one of: ${Marksheet.EXAM_TYPES.join(', ')}`,
           },
         });
       }
@@ -756,11 +765,12 @@ const replaceNoteFile = async (req, res) => {
       }
   
       const marksheet = await Marksheet.findOneAndUpdate(
-        { studentId, courseId, term },
+        { studentId, courseId, term, examType },
         {
           studentId,
           courseId,
           term,
+          examType,
           internalExamMarks,
           internalExamTotalMarks,
           teacherEvaluationScore,
@@ -787,14 +797,24 @@ const replaceNoteFile = async (req, res) => {
   const bulkUploadMarksheets = async (req, res) => {
     try {
       const { courseId } = req.params;
-      const { term, marksheets } = req.body;
+      const { term, examType, marksheets } = req.body;
   
-      if (!term || !marksheets || !Array.isArray(marksheets) || marksheets.length === 0) {
+      if (!term || !examType || !marksheets || !Array.isArray(marksheets) || marksheets.length === 0) {
         return res.status(400).json({
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: 'term and marksheets array are required',
+            message: 'term, examType and marksheets array are required',
+          },
+        });
+      }
+
+      if (!Marksheet.EXAM_TYPES.includes(examType)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `examType must be one of: ${Marksheet.EXAM_TYPES.join(', ')}`,
           },
         });
       }
@@ -848,9 +868,9 @@ const replaceNoteFile = async (req, res) => {
       const results = await Promise.all(
         marksheets.map(({ studentId, internalExamMarks, internalExamTotalMarks, teacherEvaluationScore }) =>
           Marksheet.findOneAndUpdate(
-            { studentId, courseId, term },
+            { studentId, courseId, term, examType },
             {
-              studentId, courseId, term,
+              studentId, courseId, term, examType,
               internalExamMarks, internalExamTotalMarks,
               teacherEvaluationScore,
               uploadedBy: req.user._id,
@@ -874,12 +894,14 @@ const replaceNoteFile = async (req, res) => {
       });
     }
   };
-  // ─── GET MARKSHEETS FOR COURSE/TERM ─────────────────────────────
+
+//  GET MARKSHEETS FOR COURSE/TERM 
 // Returns existing marksheets for pre-filling the edit form
+
 const getMarksheetsByCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { term } = req.query;
+    const { term, examType } = req.query;
 
     const verified = await verifyTeacherCourse(req.user._id, courseId);
     if (!verified) {
@@ -891,6 +913,7 @@ const getMarksheetsByCourse = async (req, res) => {
 
     const filter = { courseId };
     if (term) filter.term = parseInt(term);
+    if (examType) filter.examType = examType;
 
     const marksheets = await Marksheet.find(filter)
       .populate({

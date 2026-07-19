@@ -202,6 +202,7 @@ class MarksheetModel {
   final String id;
   final String subjectName;
   final int term;
+  final String examType;
   final double internalExamMarks;
   final double internalExamTotalMarks;
   final double teacherEvaluationScore;
@@ -210,6 +211,7 @@ class MarksheetModel {
     required this.id,
     required this.subjectName,
     required this.term,
+    required this.examType,
     required this.internalExamMarks,
     required this.internalExamTotalMarks,
     required this.teacherEvaluationScore,
@@ -221,6 +223,7 @@ class MarksheetModel {
       id: json['_id'] ?? '',
       subjectName: course['subjectName'] ?? '',
       term: json['term'] ?? 0,
+      examType: json['examType'] ?? '',
       internalExamMarks:
           double.tryParse(json['internalExamMarks'].toString()) ?? 0.0,
       internalExamTotalMarks:
@@ -230,6 +233,14 @@ class MarksheetModel {
     );
   }
 }
+
+// Human-readable labels, matching the backend's Marksheet.EXAM_TYPES
+// and the teacher-side kExamTypeLabels constant.
+const Map<String, String> examTypeLabels = {
+  'first_terminal': 'First Terminal',
+  'mid_term': 'Mid Term',
+  'pre_board': 'Pre-Board',
+};
 
 class FinalResultModel {
   final String id;

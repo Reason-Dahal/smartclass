@@ -376,7 +376,8 @@ const getMyNotes = async (req, res) => {
   }
 };
 
-// ─── MARKSHEETS ───────────────────────────────────────────────────
+
+// MARKSHEETS
 
 const getMyMarksheets = async (req, res) => {
   try {
@@ -397,9 +398,39 @@ const getMyMarksheets = async (req, res) => {
       .populate('courseId', 'subjectName term')
       .sort({ term: -1 });
 
+    // Group by examType so students see their marks organized under
+    // First Terminal / Mid Term / Pre-Board headings, rather than
+    // one flat undifferentiated list.
+    const examTypeLabels = {
+      first_terminal: 'First Terminal',
+      mid_term: 'Mid Term',
+      pre_board: 'Pre-Board',
+    };
+
+    const groups = {};
+    Marksheet.EXAM_TYPES.forEach((type) => {
+      groups[type] = {
+        examType: type,
+        label: examTypeLabels[type],
+        marksheets: [],
+      };
+    });
+
+    marksheets.forEach((m) => {
+      if (groups[m.examType]) {
+        groups[m.examType].marksheets.push(m);
+      }
+    });
+
+    // Only return exam types that actually have at least one record —
+    // avoids showing three empty sections when a term has just started.
+    const nonEmptyGroups = Object.values(groups).filter(
+      (g) => g.marksheets.length > 0
+    );
+
     res.status(200).json({
       success: true,
-      data: { marksheets },
+      data: { groups: nonEmptyGroups },
     });
   } catch (error) {
     res.status(500).json({
@@ -409,7 +440,7 @@ const getMyMarksheets = async (req, res) => {
   }
 };
 
-// ─── FINAL RESULTS ────────────────────────────────────────────────
+//FINAL RESULTS 
 
 const getMyFinalResults = async (req, res) => {
   try {
@@ -438,7 +469,7 @@ const getMyFinalResults = async (req, res) => {
     });
   }
 };
-// ─── EVALUATION INDICATOR ─────────────────────────────────────────
+// EVALUATION INDICATOR 
 
 const getEvaluationIndicator = async (req, res) => {
   try {
@@ -495,17 +526,32 @@ const getEvaluationIndicator = async (req, res) => {
       ? (presentClasses / totalClasses) * 100
       : 0;
 
-    // 2. Internal exam percentage
-    const marksheet = await Marksheet.findOne({
+    /* 2. Internal exam percentage — averaged across whichever exam
+     types (First Terminal, Mid Term, Pre-Board) currently exist
+     for this course and term. Simple average, unweighted between
+     exam types. If none exist yet, treated as 0. */
+    const currentTerm = student.batchId?.currentTerm || 1;
+
+    const examMarksheets = await Marksheet.find({
       courseId,
       studentId: student._id,
+      term: currentTerm, 
     });
-    const internalExamPercent = marksheet
-      ? (marksheet.internalExamMarks / marksheet.internalExamTotalMarks) * 100
-      : 0;
-    const teacherEvalScore = marksheet
-      ? marksheet.teacherEvaluationScore
-      : 0;
+
+    let internalExamPercent = 0;
+    let teacherEvalScore = 0;
+
+    if (examMarksheets.length > 0) {
+      const examPercents = examMarksheets.map(
+        (m) => (m.internalExamMarks / m.internalExamTotalMarks) * 100
+      );
+      const evalScores = examMarksheets.map((m) => m.teacherEvaluationScore);
+
+      internalExamPercent =
+        examPercents.reduce((sum, p) => sum + p, 0) / examPercents.length;
+      teacherEvalScore =
+        evalScores.reduce((sum, s) => sum + s, 0) / evalScores.length;
+    }
 
     // 3. Assignment submission percentage
     const assignments = await Assignment.find({ courseId, isActive: true });
@@ -579,8 +625,7 @@ const getEvaluationIndicator = async (req, res) => {
   }
 };
 
-// ─── DELET SUBMISSION ────────────────────────────────────────────────
-
+// DELET SUBMISSION
 const deleteSubmission = async (req, res) => {
   try {
     const student = await getStudentProfile(req.user._id);

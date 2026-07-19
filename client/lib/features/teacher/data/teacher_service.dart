@@ -378,12 +378,13 @@ class TeacherService {
   Future<void> bulkUploadMarksheets(
     String courseId, {
     required int term,
+    required String examType,
     required List<Map<String, dynamic>> marksheets,
   }) async {
     try {
       await _dio.post(
         '/teacher/courses/$courseId/marksheets/bulk',
-        data: {'term': term, 'marksheets': marksheets},
+        data: {'term': term, 'examType': examType, 'marksheets': marksheets},
       );
     } on DioException catch (e) {
       if (e.response != null) {

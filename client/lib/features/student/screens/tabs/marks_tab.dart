@@ -1,3 +1,4 @@
+import 'package:client/features/student/models/student_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -59,7 +60,7 @@ class _MarksTabState extends ConsumerState<MarksTab>
   }
 }
 
-// ── TERMINAL RESULTS ─────────────────────────────────────────────────────────
+//  TERMINAL RESULTS
 
 class _TerminalResultsView extends ConsumerWidget {
   const _TerminalResultsView();
@@ -69,7 +70,6 @@ class _TerminalResultsView extends ConsumerWidget {
     final selectedTerm = ref.watch(selectedMarksTermProvider);
     final marksheets = ref.watch(studentMarksheetsByTermProvider(selectedTerm));
 
-    // Get all available terms from all marksheets to populate selector
     final allMarksheets = ref.watch(studentMarksheetsProvider);
     final availableTerms =
         allMarksheets.whenOrNull(
@@ -79,6 +79,9 @@ class _TerminalResultsView extends ConsumerWidget {
           },
         ) ??
         [1];
+
+    // Fixed display order — matches the backend's Marksheet.EXAM_TYPES
+    const examTypeOrder = ['first_terminal', 'mid_term', 'pre_board'];
 
     return Column(
       children: [
@@ -111,7 +114,7 @@ class _TerminalResultsView extends ConsumerWidget {
           ),
         ),
 
-        // Results table
+        // Results — grouped by exam type
         Expanded(
           child: marksheets.when(
             data: (list) {
@@ -122,154 +125,33 @@ class _TerminalResultsView extends ConsumerWidget {
                 );
               }
 
-              // Compute aggregate
-              final totalMarks = list.fold<double>(
-                0,
-                (sum, m) => sum + m.internalExamTotalMarks,
-              );
-              final obtainedMarks = list.fold<double>(
-                0,
-                (sum, m) => sum + m.internalExamMarks,
-              );
-              final aggPercent = totalMarks > 0
-                  ? (obtainedMarks / totalMarks * 100).toStringAsFixed(1)
-                  : '0.0';
+              // Group the flat list by examType
+              final Map<String, List<dynamic>> byExamType = {};
+              for (final m in list) {
+                byExamType.putIfAbsent(m.examType, () => []).add(m);
+              }
+
+              // Only show sections that actually have data, in fixed order
+              final sectionsToShow = examTypeOrder
+                  .where((type) => byExamType.containsKey(type))
+                  .toList();
 
               return RefreshIndicator(
                 onRefresh: () async {
                   ref.invalidate(studentMarksheetsByTermProvider(selectedTerm));
                   ref.invalidate(studentMarksheetsProvider);
                 },
-                child: SingleChildScrollView(
+                child: ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // DataTable
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(
-                            AppColors.infoLight,
-                          ),
-                          columnSpacing: 24,
-                          columns: const [
-                            DataColumn(
-                              label: Text(
-                                'Subject',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Total',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Obtained',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            DataColumn(
-                              label: Text(
-                                '%',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                          rows: [
-                            // Data rows
-                            ...list.map((m) {
-                              final pct = m.internalExamTotalMarks > 0
-                                  ? (m.internalExamMarks /
-                                            m.internalExamTotalMarks *
-                                            100)
-                                        .toStringAsFixed(1)
-                                  : '0.0';
-                              final isPassing =
-                                  double.tryParse(pct) != null &&
-                                  double.parse(pct) >= 40;
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    Text(
-                                      m.subjectName,
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      m.internalExamTotalMarks.toStringAsFixed(
-                                        0,
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      m.internalExamMarks.toStringAsFixed(0),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      '$pct%',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: isPassing
-                                            ? AppColors.success
-                                            : AppColors.danger,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }),
-
-                            // Aggregate row
-                            DataRow(
-                              color: WidgetStateProperty.all(
-                                AppColors.surfaceSecondary,
-                              ),
-                              cells: [
-                                const DataCell(
-                                  Text(
-                                    'Total',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  Text(
-                                    totalMarks.toStringAsFixed(0),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  Text(
-                                    obtainedMarks.toStringAsFixed(0),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  Text(
-                                    '$aggPercent%',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  itemCount: sectionsToShow.length,
+                  itemBuilder: (context, index) {
+                    final examType = sectionsToShow[index];
+                    final sectionList = byExamType[examType]!;
+                    return _ExamTypeSection(
+                      label: examTypeLabels[examType] ?? examType,
+                      marksheets: sectionList,
+                    );
+                  },
                 ),
               );
             },
@@ -286,8 +168,162 @@ class _TerminalResultsView extends ConsumerWidget {
   }
 }
 
-// ── FINAL RESULTS ────────────────────────────────────────────────────────────
+//  ONE EXAM TYPE SECTION
 
+class _ExamTypeSection extends StatelessWidget {
+  final String label;
+  final List<dynamic> marksheets; // List<MarksheetModel>
+
+  const _ExamTypeSection({required this.label, required this.marksheets});
+
+  @override
+  Widget build(BuildContext context) {
+    final totalMarks = marksheets.fold<double>(
+      0,
+      (sum, m) => sum + m.internalExamTotalMarks,
+    );
+    final obtainedMarks = marksheets.fold<double>(
+      0,
+      (sum, m) => sum + m.internalExamMarks,
+    );
+    final aggPercent = totalMarks > 0
+        ? (obtainedMarks / totalMarks * 100).toStringAsFixed(1)
+        : '0.0';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(AppColors.infoLight),
+                columnSpacing: 24,
+                columns: const [
+                  DataColumn(
+                    label: Text(
+                      'Subject',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'Total',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'Obtained',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      '%',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+                rows: [
+                  ...marksheets.map((m) {
+                    final pct = m.internalExamTotalMarks > 0
+                        ? (m.internalExamMarks / m.internalExamTotalMarks * 100)
+                              .toStringAsFixed(1)
+                        : '0.0';
+                    final isPassing =
+                        double.tryParse(pct) != null && double.parse(pct) >= 40;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Text(
+                            m.subjectName,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        DataCell(
+                          Text(m.internalExamTotalMarks.toStringAsFixed(0)),
+                        ),
+                        DataCell(Text(m.internalExamMarks.toStringAsFixed(0))),
+                        DataCell(
+                          Text(
+                            '$pct%',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isPassing
+                                  ? AppColors.success
+                                  : AppColors.danger,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                  DataRow(
+                    color: WidgetStateProperty.all(AppColors.surfaceSecondary),
+                    cells: [
+                      const DataCell(
+                        Text(
+                          'Total',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          totalMarks.toStringAsFixed(0),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          obtainedMarks.toStringAsFixed(0),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          '$aggPercent%',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// FINAL RESULTS
 class _FinalResultsView extends ConsumerWidget {
   const _FinalResultsView();
 

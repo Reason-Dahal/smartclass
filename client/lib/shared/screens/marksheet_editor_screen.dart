@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 
+const Map<String, String> kExamTypeLabels = {
+  'first_terminal': 'First Terminal',
+  'mid_term': 'Mid Term',
+  'pre_board': 'Pre-Board',
+};
+
+const List<String> kExamTypes = ['first_terminal', 'mid_term', 'pre_board'];
+
 /// Shared marksheet entry/edit screen, used by both teacher (own courses
 /// only) and admin (any course, override mode) via dependency injection —
 /// the screen doesn't know or care which role is using it, it just calls
@@ -9,6 +17,10 @@ import '../../core/constants/app_colors.dart';
 /// Always loads the full enrolled roster AND existing marksheets, then
 /// merges them by studentId — so newly enrolled students always appear,
 /// pre-filled with existing marks where available and empty otherwise.
+///
+/// Marks are entered per exam type (First Terminal / Mid Term / Pre-Board)
+/// — the teacher/admin picks which exam they're entering marks for,
+/// same as they pick the term.
 class MarksheetEditorScreen extends StatefulWidget {
   final String courseId;
   final String subjectName;
@@ -22,6 +34,7 @@ class MarksheetEditorScreen extends StatefulWidget {
   final Future<void> Function(
     String courseId, {
     required int term,
+    required String examType,
     required List<Map<String, dynamic>> marksheets,
   })
   bulkUpload;
@@ -49,11 +62,17 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
   // Full enrolled roster — always the source of truth for who appears.
   List<Map<String, dynamic>> _roster = [];
 
-  // All existing marksheets for this course, across whichever terms exist.
+  // All existing marksheets for this course, across whichever terms
+  // and exam types exist.
   List<Map<String, dynamic>> _allMarksheets = [];
 
   List<int> _terms = [];
   int _selectedTerm = 1;
+
+  // Exam type is always all three, fixed — teacher can enter marks for
+  // any of them regardless of whether one already has data, so this
+  // isn't derived from existing records like _terms is.
+  String _selectedExamType = kExamTypes.first;
 
   // Every controller is keyed by studentId — consistently, regardless
   // of whether that student already has a marksheet or not.
@@ -64,7 +83,7 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
   );
 
   // Ordered list of studentIds currently shown, and their display names —
-  // rebuilt from the roster every time the selected term changes.
+  // rebuilt from the roster every time the selected term/examType changes.
   List<String> _studentIds = [];
   final Map<String, String> _studentNames = {};
 
@@ -98,7 +117,7 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
         _isLoading = false;
       });
 
-      _buildForSelectedTerm();
+      _buildForSelection();
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -107,21 +126,24 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
     }
   }
 
-  // Rebuilds the visible list and controllers for whichever term is
-  // currently selected — always starting from the full roster, then
-  // overlaying existing marks for that term where they exist.
-  void _buildForSelectedTerm() {
+  // Rebuilds the visible list and controllers for whichever term AND
+  // exam type is currently selected — always starting from the full
+  // roster, then overlaying existing marks where they exist.
+  void _buildForSelection() {
     _disposeControllers();
     _studentIds = [];
     _studentNames.clear();
 
-    final marksheetsForTerm = _allMarksheets
-        .where((m) => m['term'] == _selectedTerm)
+    final matchingMarksheets = _allMarksheets
+        .where(
+          (m) =>
+              m['term'] == _selectedTerm && m['examType'] == _selectedExamType,
+        )
         .toList();
 
     // Map existing marksheet data by studentId for quick lookup.
     final marksByStudentId = <String, Map<String, dynamic>>{};
-    for (final m in marksheetsForTerm) {
+    for (final m in matchingMarksheets) {
       final studentData = m['studentId'] is Map
           ? m['studentId'] as Map
           : <String, dynamic>{};
@@ -150,8 +172,6 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
         text: existingMark?['teacherEvaluationScore']?.toString() ?? '',
       );
 
-      // Pick up the shared total from whichever existing record has one —
-      // they should all agree, so the first one found is enough.
       if (sharedTotalFromExisting == null &&
           existingMark?['internalExamTotalMarks'] != null) {
         sharedTotalFromExisting = existingMark!['internalExamTotalMarks']
@@ -165,8 +185,12 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
   }
 
   void _disposeControllers() {
-    for (final c in _marksControllers.values) c.dispose();
-    for (final c in _evalControllers.values) c.dispose();
+    for (final c in _marksControllers.values) {
+      c.dispose();
+    }
+    for (final c in _evalControllers.values) {
+      c.dispose();
+    }
     _marksControllers.clear();
     _evalControllers.clear();
   }
@@ -198,13 +222,16 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
       await widget.bulkUpload(
         widget.courseId,
         term: _selectedTerm,
+        examType: _selectedExamType,
         marksheets: payload,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Marksheets saved successfully'),
+          SnackBar(
+            content: Text(
+              '${kExamTypeLabels[_selectedExamType]} marksheets saved successfully',
+            ),
             backgroundColor: AppColors.success,
           ),
         );
@@ -225,16 +252,14 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // A student "has" a marksheet for this term if any existing record
-    // matches — purely for the AppBar title's wording, not for filtering.
-    final hasAnyMarksheetForTerm = _allMarksheets.any(
-      (m) => m['term'] == _selectedTerm,
+    final hasAnyMarksheetForSelection = _allMarksheets.any(
+      (m) => m['term'] == _selectedTerm && m['examType'] == _selectedExamType,
     );
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '${hasAnyMarksheetForTerm ? 'Edit' : 'Enter'} Marksheet — ${widget.subjectName}',
+          '${hasAnyMarksheetForSelection ? 'Edit' : 'Enter'} Marksheet — ${widget.subjectName}',
           style: const TextStyle(fontSize: 15),
           overflow: TextOverflow.ellipsis,
         ),
@@ -271,11 +296,40 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
           ? const Center(child: Text('No students enrolled in this course'))
           : Column(
               children: [
+                // Exam type selector — always shown, since a teacher can
+                // enter marks for any of the three exams regardless of
+                // whether it already has data.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedExamType,
+                    decoration: const InputDecoration(
+                      labelText: 'Exam',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: kExamTypes
+                        .map(
+                          (type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(kExamTypeLabels[type]!),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedExamType = val);
+                        _buildForSelection();
+                      }
+                    },
+                  ),
+                ),
+
                 if (_terms.length > 1)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: DropdownButtonFormField<int>(
-                      value: _selectedTerm,
+                      initialValue: _selectedTerm,
                       decoration: const InputDecoration(
                         labelText: 'Term',
                         isDense: true,
@@ -292,7 +346,7 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
                       onChanged: (val) {
                         if (val != null) {
                           setState(() => _selectedTerm = val);
-                          _buildForSelectedTerm();
+                          _buildForSelection();
                         }
                       },
                     ),
@@ -300,11 +354,15 @@ class _MarksheetEditorScreenState extends State<MarksheetEditorScreen> {
                 else
                   Container(
                     width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 10,
                     ),
-                    color: AppColors.infoLight,
+                    decoration: BoxDecoration(
+                      color: AppColors.infoLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     child: Text(
                       'Term $_selectedTerm — ${widget.subjectName}',
                       style: const TextStyle(

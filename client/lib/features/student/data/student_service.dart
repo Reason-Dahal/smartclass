@@ -124,7 +124,7 @@ class StudentService {
     }
   }
 
-  // ─── MARKSHEETS ──────────────────────────────────────────────────
+  //  MARKSHEETS
 
   Future<List<MarksheetModel>> getMyMarksheets({int? term}) async {
     try {
@@ -132,8 +132,16 @@ class StudentService {
         ApiConstants.studentMarksheets,
         queryParameters: term != null ? {'term': term} : null,
       );
-      final marksheets = response.data['data']['marksheets'] as List;
-      return marksheets.map((e) => MarksheetModel.fromJson(e)).toList();
+
+      final groups = response.data['data']['groups'] as List;
+      final flattened = <MarksheetModel>[];
+      for (final group in groups) {
+        final marksheets = (group['marksheets'] as List? ?? []);
+        for (final m in marksheets) {
+          flattened.add(MarksheetModel.fromJson(m as Map<String, dynamic>));
+        }
+      }
+      return flattened;
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(
@@ -145,8 +153,7 @@ class StudentService {
     }
   }
 
-  // ─── EVALUATION ──────────────────────────────────────────────────
-
+  // EVALUATION
   Future<EvaluationModel> getEvaluation(String courseId) async {
     try {
       final response = await _dio.get(
@@ -165,8 +172,7 @@ class StudentService {
     }
   }
 
-  // ─── COURSES ─────────────────────────────────────────────────────
-
+  // COURSES
   Future<List<CourseModel>> getMyCourses() async {
     try {
       final response = await _dio.get(ApiConstants.studentCourses);
@@ -183,7 +189,7 @@ class StudentService {
     }
   }
 
-  // ─── Final Result ─────────────────────────────────────────────────────
+  // Final Result
   Future<List<FinalResultModel>> getMyFinalResults() async {
     try {
       final response = await _dio.get(ApiConstants.studentFinalResults);
@@ -200,8 +206,7 @@ class StudentService {
     }
   }
 
-  // ─── NOTIFICATIONS ───────────────────────────────────────────────
-
+  //  NOTIFICATIONS
   Future<List<NotificationModel>> getMyNotifications() async {
     try {
       final response = await _dio.get(ApiConstants.studentNotifications);

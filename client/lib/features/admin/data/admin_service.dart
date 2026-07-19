@@ -764,12 +764,13 @@ class AdminService {
   Future<void> adminBulkUploadMarksheets(
     String courseId, {
     required int term,
+    required String examType,
     required List<Map<String, dynamic>> marksheets,
   }) async {
     try {
       await _dio.post(
         '${ApiConstants.courseEnrollmentStatus}/$courseId/marksheets/bulk',
-        data: {'term': term, 'marksheets': marksheets},
+        data: {'term': term, 'examType': examType, 'marksheets': marksheets},
       );
     } on DioException catch (e) {
       if (e.response != null) {

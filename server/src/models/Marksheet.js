@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const EXAM_TYPES = ['first_terminal', 'mid_term', 'pre_board'];
+
 const marksheetSchema = new mongoose.Schema(
   {
     studentId: {
@@ -14,6 +16,11 @@ const marksheetSchema = new mongoose.Schema(
     },
     term: {
       type: Number,
+      required: true,
+    },
+    examType: {
+      type: String,
+      enum: EXAM_TYPES,
       required: true,
     },
     internalExamMarks: {
@@ -43,8 +50,14 @@ const marksheetSchema = new mongoose.Schema(
   }
 );
 
-marksheetSchema.index({ studentId: 1, courseId: 1, term: 1 }, { unique: true });
+// One marksheet per student, per course, per term, per exam type —
+// First Terminal, Mid Term, and Pre-Board are now independent records.
+marksheetSchema.index(
+  { studentId: 1, courseId: 1, term: 1, examType: 1 },
+  { unique: true }
+);
 
 const Marksheet = mongoose.model('Marksheet', marksheetSchema);
+Marksheet.EXAM_TYPES = EXAM_TYPES;
 
 module.exports = Marksheet;
