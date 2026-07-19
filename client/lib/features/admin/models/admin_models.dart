@@ -30,6 +30,7 @@ class AdminUserModel {
   final String? department; // teachers only
   final String? rollNumber; // students only
   final String? programId; // students only
+  final String? programName; // students only, for grouping display
   final String? batchId; // students only
 
   // V2.5 addition — active links count, used to split
@@ -51,6 +52,7 @@ class AdminUserModel {
     this.department,
     this.rollNumber,
     this.programId,
+    this.programName,
     this.batchId,
     this.activeCount = 0,
     this.courses = const [],
@@ -66,6 +68,9 @@ class AdminUserModel {
     final programId = programRaw is Map
         ? programRaw['_id'] as String?
         : programRaw as String?;
+    final programName = programRaw is Map
+        ? programRaw['name'] as String?
+        : null;
     final batchId = batchRaw is Map
         ? batchRaw['_id'] as String?
         : batchRaw as String?;
@@ -85,6 +90,7 @@ class AdminUserModel {
       department: json['department'] as String?,
       rollNumber: json['rollNumber'] as String?,
       programId: programId,
+      programName: programName,
       batchId: batchId,
       // courseCount comes from getTeachers, enrollmentCount from
       // getStudents — only one will ever be present per response,

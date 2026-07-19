@@ -59,7 +59,7 @@ class AdminTeachersSection extends ConsumerWidget {
                         side: const BorderSide(color: AppColors.borderLight),
                       ),
                       child: ExpansionTile(
-                        initiallyExpanded: true,
+                        initiallyExpanded: false,
                         leading: CircleAvatar(
                           backgroundColor: AppColors.infoLight,
                           child: Text(

@@ -16,16 +16,100 @@ class AdminStudentsSection extends ConsumerWidget {
 
     return Scaffold(
       body: students.when(
-        data: (list) => list.isEmpty
-            ? const Center(child: Text('No students yet'))
-            : RefreshIndicator(
-                onRefresh: () async => ref.invalidate(adminStudentsProvider),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: list.length,
-                  itemBuilder: (context, index) => UserCard(user: list[index]),
-                ),
-              ),
+        data: (list) {
+          if (list.isEmpty) {
+            return const Center(child: Text('No students yet'));
+          }
+
+          final enrolled = list.where((s) => s.activeCount > 0).toList();
+          final unenrolled = list.where((s) => s.activeCount == 0).toList();
+
+          // Group enrolled students by program — each student belongs
+          // to exactly one program, unlike teachers who can span several.
+          final Map<String, List<AdminUserModel>> byProgram = {};
+          for (final student in enrolled) {
+            final programName = student.programName ?? 'Unknown Program';
+            byProgram.putIfAbsent(programName, () => []).add(student);
+          }
+          final programNames = byProgram.keys.toList()..sort();
+
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(adminStudentsProvider),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (enrolled.isNotEmpty) ...[
+                  _SectionHeader(
+                    label: 'Enrolled',
+                    count: enrolled.length,
+                    color: AppColors.success,
+                  ),
+                  const SizedBox(height: 8),
+                  ...programNames.map((programName) {
+                    final studentsInProgram = byProgram[programName]!;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppColors.borderLight),
+                      ),
+                      child: ExpansionTile(
+                        initiallyExpanded: false,
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.infoLight,
+                          child: Text(
+                            programName.isNotEmpty
+                                ? programName[0].toUpperCase()
+                                : 'P',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          programName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${studentsInProgram.length} student${studentsInProgram.length > 1 ? 's' : ''}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        children: studentsInProgram
+                            .map(
+                              (student) => Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  8,
+                                ),
+                                child: UserCard(user: student),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                ],
+                if (unenrolled.isNotEmpty) ...[
+                  _SectionHeader(
+                    label: 'Unenrolled',
+                    count: unenrolled.length,
+                    color: AppColors.danger,
+                    subtitle:
+                        'No active enrollments — may need manual enrollment',
+                  ),
+                  ...unenrolled.map((s) => UserCard(user: s)),
+                ],
+              ],
+            ),
+          );
+        },
         loading: () => const LoadingWidget(message: 'Loading students...'),
         error: (e, _) => AppErrorWidget(
           message: e.toString(),
@@ -274,5 +358,77 @@ class AdminStudentsSection extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final String? subtitle;
+
+  const _SectionHeader({
+    required this.label,
+    required this.count,
+    required this.color,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 18,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                subtitle!,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                  fontStyle: FontStyle.italic,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }

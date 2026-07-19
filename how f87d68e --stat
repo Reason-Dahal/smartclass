@@ -1,0 +1,96 @@
+[33mf87d68e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mv2.5/teacher-student-organization[m[33m)[m feat: teachers list split into Assigned (grouped by program/subject) and Unassigned sections
+[33mc1e698b[m[33m ([m[1;31morigin/main[m[33m, [m[1;32mv2.4/exam-categories[m[33m, [m[1;32mmain[m[33m)[m feat: exam type selector in marksheet editor, wired through teacher and admin services/student terminal results grouped by exam type (First Terminal, Mid Term, Pre-Board
+[33ma0415cd[m[33m ([m[1;32mv2.3/ux-completeness[m[33m)[m fix: marksheet editor always shows full enrolled roster, merges with existing marks; remove dead duplicate screen
+[33m72e371d[m feat: department field is now a dropdown of existing programs instead of free text
+[33m0dc6c7f[m fix: teacher can now preview a student's submitted file before grading
+[33m0eee080[m feat: teacher notes management tab — grouped by program/term, with preview, replace, and delete
+[33mfd981b5[m fix: align Submit Assignment loading state with app-wide pattern, add explicit disabled guard
+[33m1306efc[m feat: complete loading states in Final Results and Eval Config dialogs, fix stale Override Data copy
+[33mf9857bf[m feat: loading states across Programs/Batches section, add missing Promote confirmation, convert to ConsumerStatefulWidget
+[33mf633c21[m feat: loading states across Edit/Create Course and per-row enrollment, fix stale rebuild in Create Course
+[33me47e9eb[m feat: loading states + double-submit prevention across all teacher_courses_tab dialogs
+[33m373d939[m fix: Add Teacher dialog — add loading spinner, fix stale button state, prevent double-submit
+[33mb2037b8[m feat: loading spinner + double-submit prevention on Add Student — establishes reusable pattern
+[33m64cf69a[m chore: remove dead ID-based override code, superseded by course-picker based override screens
+[33mc95e1d0[m feat: admin marksheet override as full screen, consistent with attendance override UX
+[33me94d0bb[m refactor: extract CoursePickerSheet/CoursePickerField into shared reusable widget
+[33me7b03e0[m feat: admin attendance override with searchable grouped course picker
+[33m3b8d6ec[m feat: shared Total Marks field applies to all students, eliminates per-row inconsistency
+[33mff41f67[m fix: clearer evaluation-disabled message for students
+[33mb5a7e34[m fix: login rate limiter now only counts failed attempts, not successful logins
+[33ma73b80f[m[33m ([m[1;32mv2.2/enrollment-system[m[33m)[m fix: title validation UX in upload note and create assignment dialogs
+[33mbac9d40[m chore: add full database cleanup script, preserves super admin only
+[33ma910a50[m fix: duplicate course section on admin home paged removed
+[33m48c5d17[m feat: admin enrollment manager UI to view and manually enroll students per course
+[33m9c327e7[m feat: auto-enroll existing students when a new compulsory course is created
+[33mbc279a8[m feat: auto-enroll student into compulsory courses on account creation
+[33maa359eb[m[33m ([m[1;32mv2.1/hardening[m[33m)[m fix: bulk marksheet upload with atomic transaction, fix student field mapping in create mode
+[33m7a3343b[m fix: hash OTP and reset token before storing to protect against DB leaks
+[33m42c91d7[m feat: rate limiting on login, forgot-password, and verify-otp endpoints
+[33m8fcf4ad[m fix: replace unsafe string-matching role check with proper JSON decode
+[33m796e3d8[m[33m ([m[1;33mtag: [m[1;33mv2.0.0[m[33m, [m[1;31morigin/v2/develop[m[33m, [m[1;32mv2/develop[m[33m)[m chore: final V2 adjustments
+[33md9bc9da[m feat: forgot password flow with OTP email verification and password reset
+[33m1b41e0c[m feat: profile screen for all three roles with change password and logout
+[33m0247037[m feat: usage-based course sorting and Quick Access shortcuts on teacher home tab
+[33m29092eb[m feat: excel-like marksheet entry table — create and edit mode in single screen
+[33m92a9624[m feat: teacher can edit own attendance records and marksheets
+[33m4092558[m feat: teacher courses and grading UI restructured to Program > Term > Subject hierarchy
+[33mf6f57bb[m feat: notes grouped by subject with term switcher, PDF preview and download
+[33m62b8fd2[m feat: assignments grouped by subject, current term, PDF preview, delete and resubmit
+[33mb03120c[m feat: marks tab — terminal results table with term selector and final results tab
+[33m4555b06[m feat: file-based final results — admin upload, student preview and download
+[33m0b1c84a[m feat: full admin CRUD for teachers, students, programs, batches and courses
+[33ma8929c0[m feat: add full CRUD operations for teachers, students, programs, batches and courses
+[33ma753ac5[m feat: replace raw ID fields with dropdowns in Add Student form
+[33mebedde3[m feat: add shared PDF viewer screen with download support
+[33m007f4b8[m feat: update Course, Submission and FinalResult models for V2
+[33m4930ac6[m feat: add splash screen with health check ping and native splash assets
+[33mb2244bf[m feat: add splash screen with health check ping and native splash assets
+[33m1a47ba0[m feat: health check endpoint, tempPassword field and storage
+[33m2ccd259[m[33m ([m[1;33mtag: [m[1;33mv1.0.0[m[33m, [m[1;31morigin/develop[m[33m, [m[1;32mdevelop[m[33m)[m fix: correct AndroidManifest XML and set app label to SmartClass
+[33m0791bfc[m fix: add internet permission and storage permissions for file picker
+[33me8617bb[m feat: add app icon and update baseUrl to production
+[33mdf0b15c[m chore: move dotenv to dependencies for production deployment
+[33m11db721[m test: Phase 4 complete — 95 backend tests + 40 manual test cases all passing
+[33m3529e95[m test: add student module tests — 80 passing across all suites
+[33md1ff865[m test: add teacher module tests — 21 passing
+[33m4bd7a53[m test: add admin user management tests — 30 passing
+[33m619d31c[m test: add authentication endpoint tests — 11 passing
+[33m337cb4e[m fix: configure Gmail SMTP for temp password emails
+[33mf658bab[m fix: back gesture handling  in UI
+[33m5b28f02[m fix: remove unnecessary cast warnings in evaluation tab
+[33m36e6725[m feat: FR-ADM-09 override attendance and marksheet data
+[33mda30256[m feat: FR-STU-09 final results tab with backlog detection
+[33m43852e7[m feat: FR-STU-07 evaluation indicator tab with breakdown
+[33me90649a[m feat: FR-TCH-05 view and grade assignment submissions
+[33m0df64a0[m feat: FR-ADM-06 evaluation config with weight sliders
+[33md7ad770[m feat: FR-ADM-05 create course and FR-ADM-08 account status management
+[33mb44ca08[m[33m ([m[1;31morigin/refactor/split-screen-files[m[33m, [m[1;32mrefactor/split-screen-files[m[33m)[m refactor: split admin dashboard into sections and widgets
+[33me203736[m refactor: split teacher dashboard into tabs and widgets
+[33m70a2dd3[m refactor: split student dashboard into tabs, widgets and providers
+[33m57d5762[m feat: complete core feature set before refactor
+[33mc8a584f[m feat: add getCourseStudents endpoint for attendance,replace manual marksheet entry with student list picker
+[33m0033117[m feat: wire Cloudinary file upload into teacher note upload
+[33m2a2f7c3[m feat: add Cloudinary file upload for submissions and notes
+[33m26c71b5[m fix: add adminAcademicRoutes and missing model imports in adminController
+[33mc561bc5[m fix: correct teacher API endpoints and note service URL
+[33meb843ed[m feat: complete teacher dashboard with courses, grading and profile tabs
+[33m9badfcf[m feat:add student models and service layer, complete student dashboard with all tabs
+[33m6a13da7[m feat: complete auth login screen with API integration and role-based routing
+[33m1976fcd[m feat: flutter app foundation — routing, theme, storage, dio client
+[33mcb1ccde[m feat: add secure storage, dio client and API exception handler
+[33m1631853[m feat: flutter project scaffold with constants and theme
+[33m6a3d78f[m docs: update README with full setup guide and env variable schedule
+[33m5550e44[m feat: add getAllBatches and manualEnroll, complete backend implementation
+[33m5ad7745[m feat: add complete student module — attendance, assignments, notes, marksheets, results, evaluation
+[33m01b7d23[m feat: add teacher module — assignments, submissions, notes, marksheets
+[33m47b071f[m feat: add teacher attendance — take, view, correct
+[33mb1e703b[m feat: complete academic structure — programs, batches, courses, enrollment
+[33mb257f02[m feat: add program and batch management with batch promotion
+[33m8db259f[m feat: admin user management with teacher and student creation
+[33mfe4b371[m feat: add JWT utility, auth middleware and authentication routes
+[33m48192ea[m feat: add Enrollment, Attendance, Assignment, Submission, Note, Marksheet, FinalResult, EvaluationConfig and Notification models
+[33m56ad4c1[m feat: add Program, Batch and Course models
+[33m648f7ca[m feat: add User, Student and Teacher models
+[33m880cb2b[m feat: connect Express server and MongoDB with DNS override
+[33m10b1f74[m chore: initial project scaffold with folder structure and gitignore
