@@ -175,7 +175,21 @@ class HomeTab extends ConsumerWidget {
                 }
                 return Column(
                   children: recent
-                      .map((n) => NotificationCard(notification: n))
+                      .map(
+                        (n) => NotificationCard(
+                          notification: n,
+                          onTap: () async {
+                            if (!n.isRead) {
+                              try {
+                                await ref
+                                    .read(studentServiceProvider)
+                                    .markNotificationRead(n.id);
+                                ref.invalidate(studentNotificationsProvider);
+                              } catch (_) {}
+                            }
+                          },
+                        ),
+                      )
                       .toList(),
                 );
               },

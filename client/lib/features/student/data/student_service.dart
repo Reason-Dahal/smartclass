@@ -102,7 +102,7 @@ class StudentService {
     }
   }
 
-  // ─── NOTES ───────────────────────────────────────────────────────
+  //  NOTES
 
   Future<NotesResponse> getMyNotes({int? term}) async {
     try {
@@ -226,6 +226,20 @@ class StudentService {
   Future<void> markNotificationRead(String id) async {
     try {
       await _dio.patch('${ApiConstants.studentNotifications}/$id/read');
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw ApiException.fromResponse(
+          e.response!.data,
+          e.response!.statusCode,
+        );
+      }
+      throw ApiException.networkError();
+    }
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    try {
+      await _dio.patch('${ApiConstants.studentNotifications}/read-all');
     } on DioException catch (e) {
       if (e.response != null) {
         throw ApiException.fromResponse(

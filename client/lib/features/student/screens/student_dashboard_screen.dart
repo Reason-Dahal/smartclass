@@ -1,3 +1,4 @@
+import 'package:client/features/student/screens/notifications_screen.dart';
 import 'package:client/shared/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -85,7 +86,11 @@ class _StudentDashboardScreenState
                   children: [
                     IconButton(
                       icon: const Icon(Icons.notifications_outlined),
-                      onPressed: () {},
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationsScreen(),
+                        ),
+                      ),
                     ),
                     if (unread > 0)
                       Positioned(

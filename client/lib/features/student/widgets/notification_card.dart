@@ -4,13 +4,17 @@ import '../models/student_models.dart';
 
 class NotificationCard extends StatelessWidget {
   final NotificationModel notification;
-  const NotificationCard({super.key, required this.notification});
+  final VoidCallback? onTap;
+
+  const NotificationCard({super.key, required this.notification, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+      color: notification.isRead ? null : AppColors.infoLight.withOpacity(0.4),
       child: ListTile(
+        onTap: onTap,
         leading: Icon(
           _iconForType(notification.type),
           color: notification.isRead ? AppColors.textMuted : AppColors.primary,
@@ -28,6 +32,16 @@ class NotificationCard extends StatelessWidget {
           _formatDate(notification.createdAt),
           style: const TextStyle(fontSize: 11),
         ),
+        trailing: notification.isRead
+            ? null
+            : Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
       ),
     );
   }
