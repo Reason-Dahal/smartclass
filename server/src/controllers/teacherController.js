@@ -8,7 +8,7 @@ const Note = require('../models/Note');
 const Marksheet = require('../models/Marksheet');
 const Notification = require('../models/Notification');
 const Student = require('../models/Student');
-const { sendPushToUser } = require('../utils/pushNotification');
+const { notifyUser, notifyUsers } = require('../utils/pushNotification');
 
 // HELPER: verify teacher owns the course
 const verifyTeacherCourse = async (teacherUserId, courseId) => {
@@ -169,7 +169,7 @@ const correctAttendance = async (req, res) => {
   }
 };
 
-// ─── EDIT ATTENDANCE ─────────────────────────────────────────────
+// EDIT ATTENDANCE
 const editAttendance = async (req, res) => {
   try {
     const { courseId, date } = req.params;
@@ -236,7 +236,7 @@ const editAttendance = async (req, res) => {
   }
 };
 
-// ─── GET ATTENDANCE DATES ────────────────────────────────────────
+// GET ATTENDANCE DATES 
 // Returns distinct dates the teacher has taken attendance for a course
 const getAttendanceDates = async (req, res) => {
   try {
@@ -341,8 +341,8 @@ const createAssignment = async (req, res) => {
     });
 
     // Notify all enrolled students — nested populate needed so we
-    // have each student's fcmToken available for the push step below,
-    // not just their userId reference.
+    // have each student's fcmToken available for the push step
+    // inside notifyUsers below.
     const enrollments = await Enrollment.find({
       courseId,
       isActive: true,
@@ -351,30 +351,18 @@ const createAssignment = async (req, res) => {
       populate: { path: 'userId', select: 'fcmToken' },
     });
 
-    const notifications = enrollments.map((e) => ({
-      userId: e.studentId.userId._id,
-      type: 'assignment',
-      message: `New assignment posted in ${verified.course.subjectName}: ${title}`,
-      relatedId: assignment._id,
-    }));
-
-    if (notifications.length > 0) {
-      await Notification.insertMany(notifications, { ordered: false });
-    }
-
-    // Fire real push notifications — no await, same fire-and-forget
-    // discipline as Course.incrementUsage below. A push failure must
-    // never block or slow down the actual assignment-creation response.
-    enrollments.forEach((e) => {
-      sendPushToUser(e.studentId.userId, {
-        title: verified.course.subjectName,
-        body: `New assignment: ${title}`,
-        data: {
-          type: 'assignment',
-          relatedId: assignment._id.toString(),
-        },
-      });
-    });
+    // Single call handles both the in-app Notification records and
+    // the real push, for every enrolled student, together.
+    await notifyUsers(
+      enrollments.map((e) => e.studentId.userId),
+      {
+        type: 'assignment',
+        message: `New assignment posted in ${verified.course.subjectName}: ${title}`,
+        relatedId: assignment._id,
+        pushTitle: verified.course.subjectName,
+        pushBody: `New assignment: ${title}`,
+      }
+    );
 
     Course.incrementUsage(req.params.courseId);
 
@@ -512,25 +500,19 @@ const createAssignment = async (req, res) => {
       await submission.save();
   
       // Notify the student their work was graded — populate userId
-      // fully so fcmToken is available for the push step below
+      // fully so fcmToken is available for the push step inside
+      // notifyUser below
       const student = await Student.findById(submission.studentId)
         .populate('userId', 'fcmToken');
 
-      await Notification.create({
-        userId: student.userId._id,
+      // Single call handles both the in-app Notification record and
+      // the real push, together.
+      await notifyUser(student.userId, {
         type: 'grade',
         message: `Your submission for "${submission.assignmentId.title}" has been graded: ${grade}`,
         relatedId: submission._id,
-      });
-
-      // Fire real push notification — fire-and-forget
-      sendPushToUser(student.userId, {
-        title: 'Assignment Graded',
-        body: `"${submission.assignmentId.title}" — Grade: ${grade}`,
-        data: {
-          type: 'grade',
-          relatedId: submission._id.toString(),
-        },
+        pushTitle: 'Assignment Graded',
+        pushBody: `"${submission.assignmentId.title}" — Grade: ${grade}`,
       });
   
       res.status(200).json({
@@ -588,28 +570,18 @@ const createAssignment = async (req, res) => {
         populate: { path: 'userId', select: 'fcmToken' },
       });
   
-      const notifications = enrollments.map((e) => ({
-        userId: e.studentId.userId._id,
-        type: 'note',
-        message: `New note uploaded in ${verified.course.subjectName}: ${title}`,
-        relatedId: note._id,
-      }));
-  
-      if (notifications.length > 0) {
-        await Notification.insertMany(notifications, { ordered: false });
-      }
-
-      // Fire real push notifications — fire-and-forget
-      enrollments.forEach((e) => {
-        sendPushToUser(e.studentId.userId, {
-          title: verified.course.subjectName,
-          body: `New note: ${title}`,
-          data: {
-            type: 'note',
-            relatedId: note._id.toString(),
-          },
-        });
-      });
+      // Single call handles both in-app Notification records and the
+      // real push, for every enrolled student, together.
+      await notifyUsers(
+        enrollments.map((e) => e.studentId.userId),
+        {
+          type: 'note',
+          message: `New note uploaded in ${verified.course.subjectName}: ${title}`,
+          relatedId: note._id,
+          pushTitle: verified.course.subjectName,
+          pushBody: `New note: ${title}`,
+        }
+      );
 
       Course.incrementUsage(req.params.courseId);
 

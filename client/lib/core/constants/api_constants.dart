@@ -1,17 +1,17 @@
 import 'package:flutter/foundation.dart';
 
 class ApiConstants {
-  // static String get baseUrl {
-  //   if (kIsWeb) return 'https://smartclass-f6nz.onrender.com/api/v1';
-  //   return 'https://smartclass-f6nz.onrender.com/api/v1';
-  // }
   static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:5000/api/v1';
-    }
-    // For physical device — change this to your IP when it changes
-    return 'http://10.0.0.24:5000/api/v1';
+    if (kIsWeb) return 'https://smartclass-f6nz.onrender.com/api/v1';
+    return 'https://smartclass-f6nz.onrender.com/api/v1';
   }
+  // static String get baseUrl {
+  //   if (kIsWeb) {
+  //     return 'http://localhost:5000/api/v1';
+  //   }
+  //   // For physical device — change this to your IP when it changes
+  //   return 'http://10.0.0.24:5000/api/v1';
+  // }
 
   // Auth
   static const String login = '/auth/login';
