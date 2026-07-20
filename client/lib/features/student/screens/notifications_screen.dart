@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_colors.dart';
-import '../models/student_models.dart';
 import '../providers/student_providers.dart';
 import '../widgets/notification_card.dart';
 import '../widgets/empty_state.dart';
